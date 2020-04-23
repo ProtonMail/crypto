@@ -19,8 +19,28 @@ import (
 )
 
 type KDF struct {
-	Hash   algorithm.Hash
-	Cipher algorithm.Cipher
+	Hash                   algorithm.Hash
+	Cipher                 algorithm.Cipher
+	Version                int    // Defaults to v1; non-standard v2 allows forwarding
+	Flags                  byte   // (v2 only)
+	ReplacementFingerprint []byte // (v2 only) fingerprint to use instead of recipient's (for v5 keys, the 20 leftmost bytes only)
+	ReplacementKDFParams   []byte // (v2 only) serialized KDF params to use in KDF digest computation
+}
+
+func (kdf KDF) write() []byte {
+	if kdf.Version != 2 {
+		// Default version is 1
+		// Length || Version || Hash || Cipher
+		return []byte{3, 1, kdf.Hash.Id(), kdf.Cipher.Id()}
+	}
+
+	// Length || Version || Hash || Cipher || Flags || (Optional) v2 Fields...
+	v2Fields := []byte{4, 2, kdf.Hash.Id(), kdf.Cipher.Id(), kdf.Flags}
+	v2Fields = append(v2Fields, kdf.ReplacementFingerprint...)
+	v2Fields = append(v2Fields, kdf.ReplacementKDFParams...)
+	// Update length field
+	v2Fields[0] = byte(len(v2Fields) - 1)
+	return v2Fields
 }
 
 type PublicKey struct {
@@ -112,25 +132,32 @@ func Decrypt(priv *PrivateKey, vsG, m, curveOID, fingerprint []byte) (msg []byte
 }
 
 func buildKey(pub *PublicKey, zb []byte, curveOID, fingerprint []byte, stripLeading, stripTrailing bool) ([]byte, error) {
-	// Param = curve_OID_len || curve_OID || public_key_alg_ID || 03
-	//         || 01 || KDF_hash_ID || KEK_alg_ID for AESKeyWrap
+	// Param = curve_OID_len || curve_OID || public_key_alg_ID
+	//         || KDF_params for AESKeyWrap
 	//         || "Anonymous Sender    " || recipient_fingerprint;
 	param := new(bytes.Buffer)
 	if _, err := param.Write(curveOID); err != nil {
 		return nil, err
 	}
-	algKDF := []byte{18, 3, 1, pub.KDF.Hash.Id(), pub.KDF.Cipher.Id()}
-	if _, err := param.Write(algKDF); err != nil {
+	algo := []byte{18}
+	if _, err := param.Write(algo); err != nil {
+		return nil, err
+	}
+	kdf := pub.KDF.ReplacementKDFParams
+	if kdf == nil {
+		kdf = pub.KDF.write()
+	}
+	if _, err := param.Write(kdf); err != nil {
 		return nil, err
 	}
 	if _, err := param.Write([]byte("Anonymous Sender    ")); err != nil {
 		return nil, err
 	}
+	if pub.KDF.ReplacementFingerprint != nil {
+		fingerprint = pub.KDF.ReplacementFingerprint
+	}
 	if _, err := param.Write(fingerprint); err != nil {
 		return nil, err
-	}
-	if param.Len() - len(curveOID) != 45 {
-		return nil, errors.New("ecdh: malformed KDF Param")
 	}
 
 	// MB = Hash ( 00 || 00 || 00 || 01 || ZB || Param );
@@ -151,7 +178,7 @@ func buildKey(pub *PublicKey, zb []byte, curveOID, fingerprint []byte, stripLead
 		// (See https://github.com/openpgpjs/openpgpjs/pull/853.)
 		for ; j >= 0 && zb[j] == 0; j-- {}
 	}
-	if _, err := h.Write(zb[i:j+1]); err != nil {
+	if _, err := h.Write(zb[i : j+1]); err != nil {
 		return nil, err
 	}
 	if _, err := h.Write(param.Bytes()); err != nil {

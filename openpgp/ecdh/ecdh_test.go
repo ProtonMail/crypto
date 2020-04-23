@@ -19,7 +19,6 @@ var (
 	testFingerprint = make([]byte, 20)
 )
 
-
 // TODO: Improve this.
 func TestEncryptDecrypt(t *testing.T) {
 	kdf := KDF{
@@ -43,5 +42,64 @@ func TestEncryptDecrypt(t *testing.T) {
 	}
 	if !bytes.Equal(message2, message) {
 		t.Errorf("decryption failed, got: %x, want: %x", message2, message)
+	}
+}
+
+func TestKDFParamsWrite(t *testing.T) {
+	kdf := KDF{
+		Hash:   algorithm.SHA512,
+		Cipher: algorithm.AES256,
+	}
+	expectBytesV1 := []byte{3, 1, kdf.Hash.Id(), kdf.Cipher.Id()}
+	gotBytes := kdf.write()
+	if !bytes.Equal(gotBytes, expectBytesV1) {
+		t.Errorf("error serializing KDF params, got %x, want: %x", gotBytes, expectBytesV1)
+	}
+
+	kdfV2Flags0x01 := KDF{
+		Hash:                   algorithm.SHA512,
+		Cipher:                 algorithm.AES256,
+		Version:                2,
+		Flags:                  0x01,
+		ReplacementFingerprint: testFingerprint,
+	}
+	expectBytesV2Flags0x01 := []byte{24, 2, kdfV2Flags0x01.Hash.Id(), kdfV2Flags0x01.Cipher.Id(), 0x01}
+	expectBytesV2Flags0x01 = append(expectBytesV2Flags0x01, testFingerprint...)
+
+	gotBytes = kdfV2Flags0x01.write()
+	if !bytes.Equal(gotBytes, expectBytesV2Flags0x01) {
+		t.Errorf("error serializing KDF params v2 (flags 0x01), got %x, want: %x", gotBytes, expectBytesV2Flags0x01)
+	}
+
+	kdfV2Flags0x02 := KDF{
+		Hash:                 algorithm.SHA512,
+		Cipher:               algorithm.AES256,
+		Version:              2,
+		Flags:                0x02,
+		ReplacementKDFParams: expectBytesV1,
+	}
+	expectBytesV2Flags0x02 := []byte{8, 2, kdfV2Flags0x02.Hash.Id(), kdfV2Flags0x01.Cipher.Id(), 0x02}
+	expectBytesV2Flags0x02 = append(expectBytesV2Flags0x02, expectBytesV1...)
+
+	gotBytes = kdfV2Flags0x02.write()
+	if !bytes.Equal(gotBytes, expectBytesV2Flags0x02) {
+		t.Errorf("error serializing KDF params v2 (flags 0x02), got %x, want: %x", gotBytes, expectBytesV2Flags0x02)
+	}
+
+	kdfV2Flags0x03 := KDF{
+		Hash:                   algorithm.SHA512,
+		Cipher:                 algorithm.AES256,
+		Version:                2,
+		Flags:                  0x03,
+		ReplacementFingerprint: testFingerprint,
+		ReplacementKDFParams:   expectBytesV1,
+	}
+	expectBytesV2Flags0x03 := []byte{28, 2, kdfV2Flags0x03.Hash.Id(), kdfV2Flags0x03.Cipher.Id(), 0x03}
+	expectBytesV2Flags0x03 = append(expectBytesV2Flags0x03, testFingerprint...)
+	expectBytesV2Flags0x03 = append(expectBytesV2Flags0x03, expectBytesV1...)
+
+	gotBytes = kdfV2Flags0x03.write()
+	if !bytes.Equal(gotBytes, expectBytesV2Flags0x03) {
+		t.Errorf("error serializing KDF params v2 (flags 0x03), got %x, want: %x", gotBytes, expectBytesV2Flags0x03)
 	}
 }
