@@ -19,28 +19,38 @@ import (
 )
 
 type KDF struct {
+	Version                int // Defaults to v1; non-standard v2 allows forwarding
 	Hash                   algorithm.Hash
 	Cipher                 algorithm.Cipher
-	Version                int    // Defaults to v1; non-standard v2 allows forwarding
 	Flags                  byte   // (v2 only)
 	ReplacementFingerprint []byte // (v2 only) fingerprint to use instead of recipient's (for v5 keys, the 20 leftmost bytes only)
 	ReplacementKDFParams   []byte // (v2 only) serialized KDF params to use in KDF digest computation
 }
 
-func (kdf KDF) write() []byte {
+func (kdf *KDF) serialize(w io.Writer) (err error) {
 	if kdf.Version != 2 {
 		// Default version is 1
 		// Length || Version || Hash || Cipher
-		return []byte{3, 1, kdf.Hash.Id(), kdf.Cipher.Id()}
+		if _, err := w.Write([]byte{3, 1, kdf.Hash.Id(), kdf.Cipher.Id()}); err != nil {
+			return err
+		}
+
+		return nil
 	}
 
 	// Length || Version || Hash || Cipher || Flags || (Optional) v2 Fields...
-	v2Fields := []byte{4, 2, kdf.Hash.Id(), kdf.Cipher.Id(), kdf.Flags}
-	v2Fields = append(v2Fields, kdf.ReplacementFingerprint...)
-	v2Fields = append(v2Fields, kdf.ReplacementKDFParams...)
-	// Update length field
-	v2Fields[0] = byte(len(v2Fields) - 1)
-	return v2Fields
+	v2Length := byte(4 + len(kdf.ReplacementFingerprint) + len(kdf.ReplacementKDFParams))
+	if _, err := w.Write([]byte{v2Length, 2, kdf.Hash.Id(), kdf.Cipher.Id(), kdf.Flags}); err != nil {
+		return err
+	}
+	if _, err := w.Write(kdf.ReplacementFingerprint); err != nil {
+		return err
+	}
+	if _, err := w.Write(kdf.ReplacementKDFParams); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type PublicKey struct {
@@ -145,7 +155,9 @@ func buildKey(pub *PublicKey, zb []byte, curveOID, fingerprint []byte, stripLead
 	}
 	kdf := pub.KDF.ReplacementKDFParams
 	if kdf == nil {
-		kdf = pub.KDF.write()
+		if err := pub.KDF.serialize(param); err != nil {
+			return nil, err
+		}
 	}
 	if _, err := param.Write(kdf); err != nil {
 		return nil, err

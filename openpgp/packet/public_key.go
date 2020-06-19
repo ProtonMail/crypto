@@ -356,11 +356,14 @@ func (pk *PublicKey) parseECDH(r io.Reader) (err error) {
 		return errors.UnsupportedError("failed to parse EC point")
 	}
 
-	var kdfLen int
-	if kdfLen = len(pk.kdf.Bytes()); kdfLen < 3 {
+	kdfLen := len(pk.kdf.Bytes())
+	if kdfLen < 3 {
 		return errors.UnsupportedError("unsupported ECDH KDF length: " + strconv.Itoa(kdfLen))
 	}
 	kdfVersion := int(pk.kdf.Bytes()[0])
+	if kdfVersion != 1 && kdfVersion != 2 {
+		return errors.UnsupportedError("unsupported ECDH KDF version: " + strconv.Itoa(int(kdfVersion)))
+	}
 	kdfHash, ok := algorithm.HashById[pk.kdf.Bytes()[1]]
 	if !ok {
 		return errors.UnsupportedError("unsupported ECDH KDF hash: " + strconv.Itoa(int(pk.kdf.Bytes()[1])))
