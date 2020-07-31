@@ -153,14 +153,15 @@ func buildKey(pub *PublicKey, zb []byte, curveOID, fingerprint []byte, stripLead
 	if _, err := param.Write(algo); err != nil {
 		return nil, err
 	}
-	kdf := pub.KDF.ReplacementKDFParams
-	if kdf == nil {
+	if pub.KDF.ReplacementKDFParams != nil {
+		kdf := pub.KDF.ReplacementKDFParams
+		if _, err := param.Write(kdf); err != nil {
+			return nil, err
+		}
+	} else {
 		if err := pub.KDF.serialize(param); err != nil {
 			return nil, err
 		}
-	}
-	if _, err := param.Write(kdf); err != nil {
-		return nil, err
 	}
 	if _, err := param.Write([]byte("Anonymous Sender    ")); err != nil {
 		return nil, err
