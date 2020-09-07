@@ -127,14 +127,14 @@ func NewECDSAPublicKey(creationTime time.Time, pub *ecdsa.PublicKey) *PublicKey 
 func NewECDHPublicKey(creationTime time.Time, pub *ecdh.PublicKey) *PublicKey {
 	var pk *PublicKey
 	var curveInfo *ecc.CurveInfo
-	var kdf = encoding.NewOID([]byte{ 0x1, pub.Hash.Id(), pub.Cipher.Id() })
+	var kdf = encoding.NewOID([]byte{0x1, pub.Hash.Id(), pub.Cipher.Id()})
 	if pub.CurveType == ecc.Curve25519 {
 		pk = &PublicKey{
 			CreationTime: creationTime,
 			PubKeyAlgo:   PubKeyAlgoECDH,
 			PublicKey:    pub,
 			p:            encoding.NewMPI(pub.X.Bytes()),
-			kdf: kdf,
+			kdf:          kdf,
 		}
 		curveInfo = ecc.FindByName("Curve25519")
 	} else {
@@ -143,7 +143,7 @@ func NewECDHPublicKey(creationTime time.Time, pub *ecdh.PublicKey) *PublicKey {
 			PubKeyAlgo:   PubKeyAlgoECDH,
 			PublicKey:    pub,
 			p:            encoding.NewMPI(elliptic.Marshal(pub.Curve, pub.X, pub.Y)),
-			kdf: kdf,
+			kdf:          kdf,
 		}
 		curveInfo = ecc.FindByCurve(pub.Curve)
 	}
@@ -345,7 +345,7 @@ func (pk *PublicKey) parseECDH(r io.Reader) (err error) {
 	c := curveInfo.Curve
 	cType := curveInfo.CurveType
 
-	var x, y *big.Int;
+	var x, y *big.Int
 	if cType == ecc.Curve25519 {
 		x = new(big.Int)
 		x.SetBytes(pk.p.Bytes())
@@ -356,11 +356,13 @@ func (pk *PublicKey) parseECDH(r io.Reader) (err error) {
 		return errors.UnsupportedError("failed to parse EC point")
 	}
 
-	if kdfLen := len(pk.kdf.Bytes()); kdfLen < 3 {
+	kdfLen := len(pk.kdf.Bytes())
+	if kdfLen < 3 {
 		return errors.UnsupportedError("unsupported ECDH KDF length: " + strconv.Itoa(kdfLen))
 	}
-	if reserved := pk.kdf.Bytes()[0]; reserved != 0x01 {
-		return errors.UnsupportedError("unsupported KDF reserved field: " + strconv.Itoa(int(reserved)))
+	kdfVersion := int(pk.kdf.Bytes()[0])
+	if kdfVersion != 1 && kdfVersion != 2 {
+		return errors.UnsupportedError("unsupported ECDH KDF version: " + strconv.Itoa(int(kdfVersion)))
 	}
 	kdfHash, ok := algorithm.HashById[pk.kdf.Bytes()[1]]
 	if !ok {
@@ -371,15 +373,46 @@ func (pk *PublicKey) parseECDH(r io.Reader) (err error) {
 		return errors.UnsupportedError("unsupported ECDH KDF cipher: " + strconv.Itoa(int(pk.kdf.Bytes()[2])))
 	}
 
+	kdf := ecdh.KDF{
+		Version: kdfVersion,
+		Hash:    kdfHash,
+		Cipher:  kdfCipher,
+	}
+	if kdfVersion == 2 {
+		if kdfLen < 4 {
+			return errors.UnsupportedError("unsupported ECDH KDF v2 length: " + strconv.Itoa(kdfLen))
+		}
+
+		kdf.Flags = pk.kdf.Bytes()[3]
+		readBytes := 4
+		if kdf.Flags&0x01 != 0x0 {
+			// Expect 20-byte fingerprint
+			if kdfLen < readBytes+20 {
+				return errors.UnsupportedError("malformed ECDH KDF params")
+			}
+			kdf.ReplacementFingerprint = pk.kdf.Bytes()[readBytes : readBytes+20]
+			readBytes += 20
+		}
+		if kdf.Flags&0x02 != 0x0 {
+			// Expect replacement params
+			// Read length field
+			if kdfLen < readBytes+1 {
+				return errors.UnsupportedError("malformed ECDH KDF params")
+			}
+			fieldLen := int(pk.kdf.Bytes()[readBytes]) + 1 // Account for length field
+			if kdfLen < readBytes+fieldLen {
+				return errors.UnsupportedError("malformed ECDH KDF params")
+			}
+			kdf.ReplacementKDFParams = pk.kdf.Bytes()[readBytes : readBytes+fieldLen]
+		}
+	}
+
 	pk.PublicKey = &ecdh.PublicKey{
 		CurveType: cType,
-		Curve: c,
-		X:     x,
-		Y:     y,
-		KDF: ecdh.KDF{
-			Hash:   kdfHash,
-			Cipher: kdfCipher,
-		},
+		Curve:     c,
+		X:         x,
+		Y:         y,
+		KDF:       kdf,
 	}
 	return
 }
