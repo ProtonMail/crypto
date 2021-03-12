@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ProtonMail/go-crypto/openpgp/symmetric"
 	"github.com/ProtonMail/go-crypto/openpgp/ecdh"
 	"github.com/ProtonMail/go-crypto/openpgp/elgamal"
 	"github.com/ProtonMail/go-crypto/openpgp/errors"
@@ -169,6 +170,30 @@ func NewECDHPublicKey(creationTime time.Time, pub *ecdh.PublicKey) *PublicKey {
 	return pk
 }
 
+func NewAEADPublicKey(creationTime time.Time, pub *symmetric.PublicKeyAEAD) *PublicKey {
+	var pk *PublicKey
+	pk = &PublicKey{
+		Version:        4,
+		CreationTime:   creationTime,
+		PubKeyAlgo:     PubKeyAlgoAEAD,
+		PublicKey:      pub,
+	}
+
+	return pk
+}
+
+func NewHMACPublicKey(creationTime time.Time, pub *symmetric.PublicKeyHMAC) *PublicKey {
+	var pk *PublicKey
+	pk = &PublicKey{
+		Version:        4,
+		CreationTime:   creationTime,
+		PubKeyAlgo:     PubKeyAlgoHMAC,
+		PublicKey:      pub,
+	}
+
+	return pk
+}
+
 func NewEdDSAPublicKey(creationTime time.Time, pub *ed25519.PublicKey) *PublicKey {
 	curveInfo := ecc.FindByName("Ed25519")
 	pk := &PublicKey{
@@ -219,6 +244,10 @@ func (pk *PublicKey) parse(r io.Reader) (err error) {
 		err = pk.parseECDH(r)
 	case PubKeyAlgoEdDSA:
 		err = pk.parseEdDSA(r)
+	case PubKeyAlgoAEAD:
+		err = pk.parseAEAD(r)
+	case PubKeyAlgoHMAC:
+		err = pk.parseHMAC(r)
 	default:
 		err = errors.UnsupportedError("public key type: " + strconv.Itoa(int(pk.PubKeyAlgo)))
 	}
@@ -446,6 +475,53 @@ func (pk *PublicKey) parseEdDSA(r io.Reader) (err error) {
 	return
 }
 
+func (pk *PublicKey) parseAEAD(r io.Reader) (err error) {
+	var cipher [1]byte
+	_, err = readFull(r, cipher[:])
+	if err != nil {
+		return
+	}
+
+	var bindingHash [32]byte
+	_, err = readFull(r, bindingHash[:])
+	if err != nil {
+		return
+	}
+
+	symmetric := &symmetric.PublicKeyAEAD{
+		Cipher: algorithm.CipherFunction(cipher[0]),
+		BindingHash: bindingHash,
+	}
+
+	pk.PublicKey = symmetric
+	return
+}
+
+func (pk *PublicKey) parseHMAC(r io.Reader) (err error) {
+	var hash [1]byte
+	_, err = readFull(r, hash[:])
+	if err != nil {
+		return
+	}
+	bindingHash, err := readBindingHash(r)
+	if err != nil {
+		return
+	}
+
+	symmetric := &symmetric.PublicKeyHMAC{
+		Hash: crypto.Hash(hash[0]),
+		BindingHash: bindingHash,
+	}
+
+	pk.PublicKey = symmetric
+	return
+}
+
+func readBindingHash(r io.Reader) (bindingHash [32]byte, err error) {
+	_, err = readFull(r, bindingHash[:])
+	return
+}
+
 // SerializeForHash serializes the PublicKey to w with the special packet
 // header format needed for hashing.
 func (pk *PublicKey) SerializeForHash(w io.Writer) error {
@@ -515,6 +591,8 @@ func (pk *PublicKey) algorithmSpecificByteCount() int {
 	case PubKeyAlgoEdDSA:
 		length += int(pk.oid.EncodedLength())
 		length += int(pk.p.EncodedLength())
+	case PubKeyAlgoAEAD, PubKeyAlgoHMAC:
+		length += 32
 	default:
 		panic("unknown public key algorithm")
 	}
@@ -591,6 +669,22 @@ func (pk *PublicKey) serializeWithoutHeaders(w io.Writer) (err error) {
 		}
 		_, err = w.Write(pk.p.EncodedBytes())
 		return
+	case PubKeyAlgoAEAD:
+		symmKey := pk.PublicKey.(*symmetric.PublicKeyAEAD)
+		cipherOctet := [1]byte{symmKey.Cipher.Id()}
+		if _, err = w.Write(cipherOctet[:]); err != nil {
+			return
+		}
+		_, err = w.Write(symmKey.BindingHash[:])
+		return
+	case PubKeyAlgoHMAC:
+		symmKey := pk.PublicKey.(*symmetric.PublicKeyHMAC)
+		hashOctet := [1]byte{uint8(symmKey.Hash)}
+		if _, err = w.Write(hashOctet[:]); err != nil {
+			return
+		}
+		_, err = w.Write(symmKey.BindingHash[:])
+		return
 	}
 	return errors.InvalidArgumentError("bad public-key algorithm")
 }
@@ -656,6 +750,13 @@ func (pk *PublicKey) VerifySignature(signed hash.Hash, sig *Signature) (err erro
 
 		if !ed25519.Verify(*eddsaPublicKey, hashBytes, eddsaSig) {
 			return errors.SignatureError("EdDSA verification failure")
+		}
+		return nil
+	case PubKeyAlgoHMAC:
+		HMACKey := pk.PublicKey.(*symmetric.PublicKeyHMAC)
+
+		if !HMACKey.Verify(hashBytes, sig.HMAC) {
+			return errors.SignatureError("HMAC verification  failure")
 		}
 		return nil
 	default:
@@ -805,6 +906,8 @@ func (pk *PublicKey) BitLength() (bitLength uint16, err error) {
 		bitLength = pk.p.BitLength()
 	case PubKeyAlgoEdDSA:
 		bitLength = pk.p.BitLength()
+	case PubKeyAlgoAEAD:
+		bitLength = 32
 	default:
 		err = errors.InvalidArgumentError("bad public-key algorithm")
 	}

@@ -6,6 +6,7 @@ package openpgp
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/rand"
 	"io"
 	"io/ioutil"
@@ -129,6 +130,90 @@ func TestNewEntity(t *testing.T) {
 
 	if !bytes.Equal(w.Bytes(), serialized) {
 		t.Errorf("results differed")
+	}
+}
+
+func TestEncryptWithAEAD(t *testing.T) {
+	c := &packet.Config{
+		Algorithm:   packet.PubKeyAlgoAEAD,
+		DefaultCipher: ciphers[4],
+		AEADConfig: &packet.AEADConfig{
+			DefaultMode: packet.AEADMode(1),
+		},
+	}
+	entity, err := NewEntity("Golang Gopher", "Test Key", "no-reply@golang.com", &packet.Config{ RSABits: 1024})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = entity.AddEncryptionSubkey(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var list []*Entity
+	list = make([]*Entity, 1)
+	list[0] = entity
+	entityList := EntityList(list)
+	buf := bytes.NewBuffer(nil)
+	w, err := Encrypt(buf, entityList[:], nil, nil, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const message = "test"
+	_, err = w.Write([]byte(message))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = w.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := ReadMessage(buf, entityList, nil /* no prompt */, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dec, err := ioutil.ReadAll(m.decrypted)
+
+	if bytes.Compare(dec, []byte(message)) != 0 {
+		t.Error("decrypted does not match original")
+	}
+}
+
+func TestSignWithHMAC(t *testing.T) {
+	c := &packet.Config{
+		Algorithm:   packet.PubKeyAlgoHMAC,
+		DefaultHash: crypto.SHA512,
+	}
+	entity, err := NewEntity("Golang Gopher", "Test Key", "no-reply@golang.com", &packet.Config{ RSABits: 1024})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = entity.AddSigningSubkey(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var list []*Entity
+	list = make([]*Entity, 1)
+	list[0] = entity
+	entityList := EntityList(list)
+
+	msgBytes := []byte("message")
+	msg := bytes.NewBuffer(msgBytes)
+	sig := bytes.NewBuffer(nil)
+
+	err = DetachSign(sig, entity, msg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msg = bytes.NewBuffer(msgBytes)
+	_, err = CheckDetachedSignature(entityList, msg, sig, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
