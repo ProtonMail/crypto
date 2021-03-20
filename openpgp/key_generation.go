@@ -254,7 +254,7 @@ func newSigner(config *packet.Config) (signer crypto.Signer, err error) {
 			return nil, err
 		}
 		return &priv, nil
-	case packet.PubKeyAlgoHMAC:
+	case packet.ExperimentalPubKeyAlgoHMAC:
 		return symmetric.HMACGenerateKey(config.Random(), config.DefaultHash)
 	default:
 		return nil, errors.InvalidArgumentError("unsupported public key algorithm")
@@ -283,7 +283,7 @@ func newDecrypter(config *packet.Config) (decrypter interface{}, err error) {
 			Cipher: algorithm.AES256,
 		}
 		return ecdh.X25519GenerateKey(config.Random(), kdf)
-	case packet.PubKeyAlgoAEAD:
+	case packet.ExperimentalPubKeyAlgoAEAD:
 		cipher := algorithm.CipherFunction(config.DefaultCipher)
 		return symmetric.AEADGenerateKey(config.Random(), cipher)
 	default:

@@ -175,7 +175,7 @@ func NewAEADPublicKey(creationTime time.Time, pub *symmetric.PublicKeyAEAD) *Pub
 	pk = &PublicKey{
 		Version:        4,
 		CreationTime:   creationTime,
-		PubKeyAlgo:     PubKeyAlgoAEAD,
+		PubKeyAlgo:     ExperimentalPubKeyAlgoAEAD,
 		PublicKey:      pub,
 	}
 
@@ -187,7 +187,7 @@ func NewHMACPublicKey(creationTime time.Time, pub *symmetric.PublicKeyHMAC) *Pub
 	pk = &PublicKey{
 		Version:        4,
 		CreationTime:   creationTime,
-		PubKeyAlgo:     PubKeyAlgoHMAC,
+		PubKeyAlgo:     ExperimentalPubKeyAlgoHMAC,
 		PublicKey:      pub,
 	}
 
@@ -244,9 +244,9 @@ func (pk *PublicKey) parse(r io.Reader) (err error) {
 		err = pk.parseECDH(r)
 	case PubKeyAlgoEdDSA:
 		err = pk.parseEdDSA(r)
-	case PubKeyAlgoAEAD:
+	case ExperimentalPubKeyAlgoAEAD:
 		err = pk.parseAEAD(r)
-	case PubKeyAlgoHMAC:
+	case ExperimentalPubKeyAlgoHMAC:
 		err = pk.parseHMAC(r)
 	default:
 		err = errors.UnsupportedError("public key type: " + strconv.Itoa(int(pk.PubKeyAlgo)))
@@ -591,7 +591,7 @@ func (pk *PublicKey) algorithmSpecificByteCount() int {
 	case PubKeyAlgoEdDSA:
 		length += int(pk.oid.EncodedLength())
 		length += int(pk.p.EncodedLength())
-	case PubKeyAlgoAEAD, PubKeyAlgoHMAC:
+	case ExperimentalPubKeyAlgoAEAD, ExperimentalPubKeyAlgoHMAC:
 		length += 32
 	default:
 		panic("unknown public key algorithm")
@@ -669,7 +669,7 @@ func (pk *PublicKey) serializeWithoutHeaders(w io.Writer) (err error) {
 		}
 		_, err = w.Write(pk.p.EncodedBytes())
 		return
-	case PubKeyAlgoAEAD:
+	case ExperimentalPubKeyAlgoAEAD:
 		symmKey := pk.PublicKey.(*symmetric.PublicKeyAEAD)
 		cipherOctet := [1]byte{symmKey.Cipher.Id()}
 		if _, err = w.Write(cipherOctet[:]); err != nil {
@@ -677,7 +677,7 @@ func (pk *PublicKey) serializeWithoutHeaders(w io.Writer) (err error) {
 		}
 		_, err = w.Write(symmKey.BindingHash[:])
 		return
-	case PubKeyAlgoHMAC:
+	case ExperimentalPubKeyAlgoHMAC:
 		symmKey := pk.PublicKey.(*symmetric.PublicKeyHMAC)
 		hashOctet := [1]byte{uint8(symmKey.Hash)}
 		if _, err = w.Write(hashOctet[:]); err != nil {
@@ -752,7 +752,7 @@ func (pk *PublicKey) VerifySignature(signed hash.Hash, sig *Signature) (err erro
 			return errors.SignatureError("EdDSA verification failure")
 		}
 		return nil
-	case PubKeyAlgoHMAC:
+	case ExperimentalPubKeyAlgoHMAC:
 		HMACKey := pk.PublicKey.(*symmetric.PublicKeyHMAC)
 
 		if !HMACKey.Verify(hashBytes, sig.HMAC) {
@@ -906,7 +906,7 @@ func (pk *PublicKey) BitLength() (bitLength uint16, err error) {
 		bitLength = pk.p.BitLength()
 	case PubKeyAlgoEdDSA:
 		bitLength = pk.p.BitLength()
-	case PubKeyAlgoAEAD:
+	case ExperimentalPubKeyAlgoAEAD:
 		bitLength = 32
 	default:
 		err = errors.InvalidArgumentError("bad public-key algorithm")

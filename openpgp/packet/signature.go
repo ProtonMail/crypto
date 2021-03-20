@@ -111,7 +111,7 @@ func (sig *Signature) parse(r io.Reader) (err error) {
 	sig.SigType = SignatureType(buf[0])
 	sig.PubKeyAlgo = PublicKeyAlgorithm(buf[1])
 	switch sig.PubKeyAlgo {
-	case PubKeyAlgoRSA, PubKeyAlgoRSASignOnly, PubKeyAlgoDSA, PubKeyAlgoECDSA, PubKeyAlgoEdDSA, PubKeyAlgoHMAC:
+	case PubKeyAlgoRSA, PubKeyAlgoRSASignOnly, PubKeyAlgoDSA, PubKeyAlgoECDSA, PubKeyAlgoEdDSA, ExperimentalPubKeyAlgoHMAC:
 	default:
 		err = errors.UnsupportedError("public key algorithm " + strconv.Itoa(int(sig.PubKeyAlgo)))
 		return
@@ -185,7 +185,7 @@ func (sig *Signature) parse(r io.Reader) (err error) {
 		if _, err = sig.EdDSASigS.ReadFrom(r); err != nil {
 			return
 		}
-	case PubKeyAlgoHMAC:
+	case ExperimentalPubKeyAlgoHMAC:
 		var lengthOctet [1]byte
 		r.Read(lengthOctet[:])
 		length := uint8(lengthOctet[0])
@@ -651,7 +651,7 @@ func (sig *Signature) Sign(h hash.Hash, priv *PrivateKey, config *Config) (err e
 			sig.EdDSASigR = encoding.NewMPI(sigdata[:32])
 			sig.EdDSASigS = encoding.NewMPI(sigdata[32:])
 		}
-	case PubKeyAlgoHMAC:
+	case ExperimentalPubKeyAlgoHMAC:
 		sigdata, err := priv.PrivateKey.(crypto.Signer).Sign(config.Random(), digest, crypto.Hash(0))
 		if err == nil {
 			sigdataLength := len(sigdata)
@@ -753,7 +753,7 @@ func (sig *Signature) Serialize(w io.Writer) (err error) {
 	case PubKeyAlgoEdDSA:
 		sigLength = int(sig.EdDSASigR.EncodedLength())
 		sigLength += int(sig.EdDSASigS.EncodedLength())
-	case PubKeyAlgoHMAC:
+	case ExperimentalPubKeyAlgoHMAC:
 		sigLength = len(sig.HMAC)
 		sigLength += 1
 	default:
@@ -819,7 +819,7 @@ func (sig *Signature) serializeBody(w io.Writer) (err error) {
 			return
 		}
 		_, err = w.Write(sig.EdDSASigS.EncodedBytes())
-	case PubKeyAlgoHMAC:
+	case ExperimentalPubKeyAlgoHMAC:
 		length := uint8(len(sig.HMAC))
 		w.Write([]byte{length})
 		if _, err = w.Write(sig.HMAC); err != nil {

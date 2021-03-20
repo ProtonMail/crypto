@@ -548,9 +548,9 @@ func (pk *PrivateKey) parsePrivateKey(data []byte) (err error) {
 		return pk.parseECDHPrivateKey(data)
 	case PubKeyAlgoEdDSA:
 		return pk.parseEdDSAPrivateKey(data)
-	case PubKeyAlgoAEAD:
+	case ExperimentalPubKeyAlgoAEAD:
 		return pk.parseAEADPrivateKey(data)
-	case PubKeyAlgoHMAC:
+	case ExperimentalPubKeyAlgoHMAC:
 		return pk.parseHMACPrivateKey(data)
 	}
 	panic("impossible")

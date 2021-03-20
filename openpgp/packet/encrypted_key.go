@@ -72,7 +72,7 @@ func (e *EncryptedKey) parse(r io.Reader) (err error) {
 		if _, err = e.encryptedMPI2.ReadFrom(r); err != nil {
 			return
 		}
-	case PubKeyAlgoAEAD:
+	case ExperimentalPubKeyAlgoAEAD:
 		if e.encryptedData, err = ioutil.ReadAll(r); err != nil {
 			return
 		}
@@ -122,7 +122,7 @@ func (e *EncryptedKey) Decrypt(priv *PrivateKey, config *Config) error {
 		m := e.encryptedMPI2.Bytes()
 		oid := priv.PublicKey.oid.EncodedBytes()
 		b, err = ecdh.Decrypt(priv.PrivateKey.(*ecdh.PrivateKey), vsG, m, oid, priv.PublicKey.Fingerprint[:])
-	case PubKeyAlgoAEAD:
+	case ExperimentalPubKeyAlgoAEAD:
 		modeAEAD := algorithm.AEADMode(e.encryptedData[0])
 		priv := priv.PrivateKey.(*symmetric.PrivateKeyAEAD)
 		b, err = priv.Decrypt(e.encryptedData[1:], modeAEAD)
@@ -212,9 +212,9 @@ func SerializeEncryptedKey(w io.Writer, pub *PublicKey, cipherFunc CipherFunctio
 		return serializeEncryptedKeyElGamal(w, config.Random(), buf, pub.PublicKey.(*elgamal.PublicKey), keyBlock)
 	case PubKeyAlgoECDH:
 		return serializeEncryptedKeyECDH(w, config.Random(), buf, pub.PublicKey.(*ecdh.PublicKey), keyBlock, pub.oid, pub.Fingerprint)
-	case PubKeyAlgoAEAD:
+	case ExperimentalPubKeyAlgoAEAD:
 		return serializeEncryptedKeyAEAD(w, config.Random(), buf, pub.PublicKey.(*symmetric.PublicKeyAEAD), keyBlock, config.AEADConfig)
-	case PubKeyAlgoDSA, PubKeyAlgoRSASignOnly, PubKeyAlgoHMAC:
+	case PubKeyAlgoDSA, PubKeyAlgoRSASignOnly, ExperimentalPubKeyAlgoHMAC:
 		return errors.InvalidArgumentError("cannot encrypt to public key of type " + strconv.Itoa(int(pub.PubKeyAlgo)))
 	}
 

@@ -135,7 +135,7 @@ func TestNewEntity(t *testing.T) {
 
 func TestEncryptWithAEAD(t *testing.T) {
 	c := &packet.Config{
-		Algorithm:   packet.PubKeyAlgoAEAD,
+		Algorithm:   packet.ExperimentalPubKeyAlgoAEAD,
 		DefaultCipher: ciphers[4],
 		AEADConfig: &packet.AEADConfig{
 			DefaultMode: packet.AEADMode(1),
@@ -184,7 +184,7 @@ func TestEncryptWithAEAD(t *testing.T) {
 
 func TestSignWithHMAC(t *testing.T) {
 	c := &packet.Config{
-		Algorithm:   packet.PubKeyAlgoHMAC,
+		Algorithm:   packet.ExperimentalPubKeyAlgoHMAC,
 		DefaultHash: crypto.SHA512,
 	}
 	entity, err := NewEntity("Golang Gopher", "Test Key", "no-reply@golang.com", &packet.Config{ RSABits: 1024})
