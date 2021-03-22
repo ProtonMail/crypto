@@ -9,7 +9,6 @@ import (
 	"crypto/rsa"
 	"encoding/binary"
 	"io"
-	"io/ioutil"
 	"math/big"
 	"strconv"
 
@@ -32,7 +31,6 @@ type EncryptedKey struct {
 	Key        []byte         // only valid after a successful Decrypt
 
 	encryptedMPI1, encryptedMPI2 encoding.Field
-	encryptedData []byte
 }
 
 func (e *EncryptedKey) parse(r io.Reader) (err error) {
@@ -73,7 +71,8 @@ func (e *EncryptedKey) parse(r io.Reader) (err error) {
 			return
 		}
 	case ExperimentalPubKeyAlgoAEAD:
-		if e.encryptedData, err = ioutil.ReadAll(r); err != nil {
+		e.encryptedMPI1 = new(encoding.OctetStream)
+		if _, err = e.encryptedMPI1.ReadFrom(r); err != nil {
 			return
 		}
 	}
@@ -123,9 +122,9 @@ func (e *EncryptedKey) Decrypt(priv *PrivateKey, config *Config) error {
 		oid := priv.PublicKey.oid.EncodedBytes()
 		b, err = ecdh.Decrypt(priv.PrivateKey.(*ecdh.PrivateKey), vsG, m, oid, priv.PublicKey.Fingerprint[:])
 	case ExperimentalPubKeyAlgoAEAD:
-		modeAEAD := algorithm.AEADMode(e.encryptedData[0])
+		modeAEAD := algorithm.AEADMode(e.encryptedMPI1.Bytes()[0])
 		priv := priv.PrivateKey.(*symmetric.PrivateKeyAEAD)
-		b, err = priv.Decrypt(e.encryptedData[1:], modeAEAD)
+		b, err = priv.Decrypt(e.encryptedMPI1.Bytes()[1:], modeAEAD)
 	default:
 		err = errors.InvalidArgumentError("cannot decrypt encrypted session key with private key of type " + strconv.Itoa(int(priv.PubKeyAlgo)))
 	}
@@ -302,9 +301,16 @@ func serializeEncryptedKeyAEAD(w io.Writer, rand io.Reader, header [10]byte, pub
 		return errors.InvalidArgumentError("AEAD encryption failed: " + err.Error())
 	}
 
+	buffer := make([]byte, len(ciphertext) + 1)
+	buffer[0] = byte(config.Mode())
+	copy(buffer[1:], ciphertext)
+	stream, _ := encoding.NewOctetStream(buffer)
+	if err != nil {
+		return err
+	}
+
 	packetLen := 10 /* header length */
-	packetLen += 1 /* one octet for AEAD mode */
-	packetLen += int(len(ciphertext))
+	packetLen += int(stream.EncodedLength())
 
 	err = serializeHeader(w, packetTypeEncryptedKey, packetLen)
 	if err != nil {
@@ -316,13 +322,6 @@ func serializeEncryptedKeyAEAD(w io.Writer, rand io.Reader, header [10]byte, pub
 		return err
 	}
 
-	var modeOctet [1]byte
-	modeOctet[0] = byte(config.Mode())
-	if _, err = w.Write(modeOctet[:]); err != nil {
-		return err
-	}
-	if _, err = w.Write(ciphertext); err != nil {
-		return err
-	}
-	return nil
+	_, err = w.Write(stream.EncodedBytes())
+	return err
 }
