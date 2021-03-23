@@ -49,13 +49,13 @@ func (stream *OctetString) EncodedLength() uint16 {
 
 func (stream *OctetString) ReadFrom(r io.Reader) (int64, error) {
 	var lengthBytes [2]byte
-	if _, err := r.Read(lengthBytes[:]); err != nil {
+	if _, err := io.ReadFull(r, lengthBytes[:]); err != nil {
 		return 0, err
 	}
 
 	stream.length = (uint16(lengthBytes[0]) << 8) + uint16(lengthBytes[1])
 
 	stream.data = make([]byte, stream.length)
-	r.Read(stream.data)
+	io.ReadFull(r, stream.data)
 	return int64(stream.length + 2), nil
 }
