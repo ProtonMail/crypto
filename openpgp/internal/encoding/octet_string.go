@@ -27,8 +27,8 @@ func (stream *OctetString) EncodedBytes() []byte {
 	buffer := make([]byte, stream.length + 2)
 
 	encodedLength := [2]byte{
-		uint8((stream.length >> 8) & 255),
-		uint8(stream.length & 255),
+		uint8((stream.length >> 8)),
+		uint8(stream.length),
 	}
 
 	copy(buffer, encodedLength[:])
