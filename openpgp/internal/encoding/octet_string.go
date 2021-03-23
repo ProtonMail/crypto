@@ -24,17 +24,11 @@ func (stream *OctetString) BitLength() uint16 {
 }
 
 func (stream *OctetString) EncodedBytes() []byte {
-	buffer := make([]byte, stream.length + 2)
-
 	encodedLength := [2]byte{
 		uint8((stream.length >> 8)),
 		uint8(stream.length),
 	}
-
-	copy(buffer, encodedLength[:])
-	copy(buffer[2:], stream.data)
-
-	return buffer
+	return append(encodedLength[:], stream.data...)
 }
 
 func (stream *OctetString) EncodedLength() uint16 {
