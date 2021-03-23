@@ -2,8 +2,6 @@ package encoding
 
 import (
 	"io"
-
-	"github.com/ProtonMail/go-crypto/openpgp/errors"
 )
 
 type OctetString struct {
@@ -11,14 +9,10 @@ type OctetString struct {
 	data []byte
 }
 
-func NewOctetString(data []byte) (*OctetString, error) {
-	byteLength := len(data)
-	if byteLength > 65535 {
-		return nil, errors.InvalidArgumentError("Data too long")
-	}
+func NewOctetString(data []byte) *OctetString {
+	byteLength := uint16(len(data))
 
-	trimmedByteLength := uint16(byteLength)
-	return &OctetString{trimmedByteLength, data}, nil
+	return &OctetString{byteLength, data}
 }
 
 func (stream *OctetString) Bytes() []byte {

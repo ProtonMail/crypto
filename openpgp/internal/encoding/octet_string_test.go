@@ -3,13 +3,10 @@ package encoding
 import (
 	"testing"
 	"bytes"
-
-	"github.com/ProtonMail/go-crypto/openpgp/errors"
 )
 
 var octetStreamTests = []struct {
 	data []byte
-	err  error
 } {
 	{
 		data: []byte{0x0, 0x0, 0x0},
@@ -20,21 +17,11 @@ var octetStreamTests = []struct {
 	{
 		data: make([]byte, 255),
 	},
-	{
-		data: make([]byte, 65538),
-		err: errors.InvalidArgumentError("Data too long"),
-	},
 }
 
 func TestOctetString(t *testing.T) {
 	for i, test := range octetStreamTests {
-		octetStream, err := NewOctetString(test.data)
-		if test.err != nil {
-			if !sameError(err, test.err) {
-				t.Errorf("#%d: NewOctetString error got:%q want:%q", i, err, test.err)
-			}
-			continue
-		}
+		octetStream := NewOctetString(test.data)
 
 		if b := octetStream.Bytes(); !bytes.Equal(b, test.data) {
 			t.Errorf("#%d: bad creation got:%x want:%x", i, b, test.data)

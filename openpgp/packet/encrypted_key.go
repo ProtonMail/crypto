@@ -304,10 +304,7 @@ func serializeEncryptedKeyAEAD(w io.Writer, rand io.Reader, header [10]byte, pub
 	buffer := make([]byte, len(ciphertext) + 1)
 	buffer[0] = byte(config.Mode())
 	copy(buffer[1:], ciphertext)
-	stream, _ := encoding.NewOctetString(buffer)
-	if err != nil {
-		return err
-	}
+	stream := encoding.NewOctetString(buffer)
 
 	packetLen := 10 /* header length */
 	packetLen += int(stream.EncodedLength())
