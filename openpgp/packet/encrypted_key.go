@@ -71,7 +71,7 @@ func (e *EncryptedKey) parse(r io.Reader) (err error) {
 			return
 		}
 	case ExperimentalPubKeyAlgoAEAD:
-		e.encryptedMPI1 = new(encoding.OctetStream)
+		e.encryptedMPI1 = new(encoding.OctetString)
 		if _, err = e.encryptedMPI1.ReadFrom(r); err != nil {
 			return
 		}
@@ -304,7 +304,7 @@ func serializeEncryptedKeyAEAD(w io.Writer, rand io.Reader, header [10]byte, pub
 	buffer := make([]byte, len(ciphertext) + 1)
 	buffer[0] = byte(config.Mode())
 	copy(buffer[1:], ciphertext)
-	stream, _ := encoding.NewOctetStream(buffer)
+	stream, _ := encoding.NewOctetString(buffer)
 	if err != nil {
 		return err
 	}

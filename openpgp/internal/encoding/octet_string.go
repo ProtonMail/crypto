@@ -6,30 +6,30 @@ import (
 	"github.com/ProtonMail/go-crypto/openpgp/errors"
 )
 
-type OctetStream struct {
+type OctetString struct {
 	length	uint16
 	data []byte
 }
 
-func NewOctetStream(data []byte) (*OctetStream, error) {
+func NewOctetString(data []byte) (*OctetString, error) {
 	byteLength := len(data)
 	if byteLength > 65535 {
 		return nil, errors.InvalidArgumentError("Data too long")
 	}
 
 	trimmedByteLength := uint16(byteLength)
-	return &OctetStream{trimmedByteLength, data}, nil
+	return &OctetString{trimmedByteLength, data}, nil
 }
 
-func (stream *OctetStream) Bytes() []byte {
+func (stream *OctetString) Bytes() []byte {
 	return stream.data
 }
 
-func (stream *OctetStream) BitLength() uint16 {
+func (stream *OctetString) BitLength() uint16 {
 	return stream.length * 8
 }
 
-func (stream *OctetStream) EncodedBytes() []byte {
+func (stream *OctetString) EncodedBytes() []byte {
 	buffer := make([]byte, stream.length + 2)
 
 	encodedLength := [2]byte{
@@ -43,11 +43,11 @@ func (stream *OctetStream) EncodedBytes() []byte {
 	return buffer
 }
 
-func (stream *OctetStream) EncodedLength() uint16 {
+func (stream *OctetString) EncodedLength() uint16 {
 	return stream.length + 2
 }
 
-func (stream *OctetStream) ReadFrom(r io.Reader) (int64, error) {
+func (stream *OctetString) ReadFrom(r io.Reader) (int64, error) {
 	var lengthBytes [2]byte
 	if _, err := r.Read(lengthBytes[:]); err != nil {
 		return 0, err
