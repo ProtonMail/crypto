@@ -706,6 +706,10 @@ func (pk *PrivateKey) parseAEADPrivateKey(data []byte) (err error) {
 
 	copy(symmetricPriv.HashSeed[:], data[:32])
 
+	if err = validateAEADParameters(symmetricPriv); err != nil {
+		return
+	}
+
 	pk.PrivateKey = symmetricPriv
 	pk.PublicKey.PublicKey = &symmetricPriv.PublicKey
 	return
@@ -725,9 +729,21 @@ func (pk *PrivateKey) parseHMACPrivateKey(data []byte) (err error) {
 
 	copy(symmetricPriv.HashSeed[:], data[:32])
 
+	if err = validateHMACParameters(symmetricPriv); err != nil {
+		return
+	}
+
 	pk.PrivateKey = symmetricPriv
 	pk.PublicKey.PublicKey = &symmetricPriv.PublicKey
 	return
+}
+
+func validateAEADParameters(priv *symmetric.PrivateKeyAEAD) error {
+	return nil
+}
+
+func validateHMACParameters(priv *symmetric.PrivateKeyHMAC) error {
+	return nil
 }
 
 func validateECDSAParameters(priv *ecdsa.PrivateKey) error {
