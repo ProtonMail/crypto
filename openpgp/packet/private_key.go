@@ -739,10 +739,18 @@ func (pk *PrivateKey) parseHMACPrivateKey(data []byte) (err error) {
 }
 
 func validateAEADParameters(priv *symmetric.PrivateKeyAEAD) error {
-	return nil
+	return validateCommonSymmetric(priv.HashSeed, priv.PublicKey.BindingHash)
 }
 
 func validateHMACParameters(priv *symmetric.PrivateKeyHMAC) error {
+	return validateCommonSymmetric(priv.HashSeed, priv.PublicKey.BindingHash)
+}
+
+func validateCommonSymmetric(seed [32]byte, bindingHash [32]byte) error {
+	expectedBindingHash := symmetric.ComputeBindingHash(seed)
+	if !bytes.Equal(expectedBindingHash, bindingHash[:]) {
+		return errors.KeyInvalidError("symmetric: wrong binding hash")
+	}
 	return nil
 }
 
