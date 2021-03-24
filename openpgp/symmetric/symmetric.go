@@ -70,12 +70,11 @@ func generatePrivatePartAEAD(rand io.Reader, cipher algorithm.CipherFunction) (p
 func (priv *PrivateKeyAEAD) generatePublicPartAEAD(cipher algorithm.CipherFunction) (err error) {
 	priv.PublicKey.Cipher = cipher
 
-	hash := sha256.New()
-	hash.Write(priv.HashSeed[:])
+	bindingHash := ComputeBindingHash(priv.HashSeed)
 
 	priv.PublicKey.Key = make([]byte, len(priv.Key))
 	copy(priv.PublicKey.Key, priv.Key)
-	copy(priv.PublicKey.BindingHash[:], hash.Sum(nil))
+	copy(priv.PublicKey.BindingHash[:], bindingHash)
 	return
 }
 
@@ -111,14 +110,19 @@ func generatePrivatePartHMAC(rand io.Reader, hash crypto.Hash) (priv *PrivateKey
 func (priv *PrivateKeyHMAC) generatePublicPartHMAC(hash crypto.Hash) (err error) {
 	priv.PublicKey.Hash = hash
 
-	bindingHash := sha256.New()
-	bindingHash.Write(priv.HashSeed[:])
-
-	copy(priv.PublicKey.BindingHash[:], bindingHash.Sum(nil))
+	bindingHash := ComputeBindingHash(priv.HashSeed)
+	copy(priv.PublicKey.BindingHash[:], bindingHash)
 
 	priv.PublicKey.Key = make([]byte, len(priv.Key))
 	copy(priv.PublicKey.Key, priv.Key)
 	return
+}
+
+func ComputeBindingHash(seed [32]byte) []byte {
+	bindingHash := sha256.New()
+	bindingHash.Write(seed[:])
+
+	return bindingHash.Sum(nil)
 }
 
 func (pub *PublicKeyAEAD) Encrypt(rand io.Reader, data []byte, mode algorithm.AEADMode) (ciphertext []byte, err error) {
