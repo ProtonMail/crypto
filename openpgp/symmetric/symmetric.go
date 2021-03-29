@@ -125,24 +125,19 @@ func ComputeBindingHash(seed [32]byte) []byte {
 	return bindingHash.Sum(nil)
 }
 
-func (pub *PublicKeyAEAD) Encrypt(rand io.Reader, data []byte, mode algorithm.AEADMode) (ciphertext []byte, err error) {
+func (pub *PublicKeyAEAD) Encrypt(rand io.Reader, data []byte, mode algorithm.AEADMode) (nonce []byte, ciphertext []byte, err error) {
 	block := pub.Cipher.New(pub.Key)
 	aead := mode.New(block)
-	nonce := make([]byte, aead.NonceSize())
+	nonce = make([]byte, aead.NonceSize())
 	rand.Read(nonce)
-	sealed := aead.Seal(nil, nonce, data, nil)
-	ciphertext = append(nonce, sealed...)
+	ciphertext = aead.Seal(nil, nonce, data, nil)
 	return
 }
 
-func (priv *PrivateKeyAEAD) Decrypt(data []byte, mode algorithm.AEADMode) (message []byte, err error) {
-	nonceLength := mode.NonceLength()
-	nonce := make([]byte, nonceLength)
-	copy(nonce, data[:nonceLength])
+func (priv *PrivateKeyAEAD) Decrypt(nonce []byte, ciphertext []byte, mode algorithm.AEADMode) (message []byte, err error) {
 
 	block := priv.PublicKey.Cipher.New(priv.Key)
 	aead := mode.New(block)
-	ciphertext := data[nonceLength:]
 	message, err = aead.Open(nil, nonce, ciphertext, nil)
 	return
 }

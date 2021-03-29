@@ -14,6 +14,7 @@ import (
 
 	"crypto"
 	"crypto/rsa"
+	"github.com/ProtonMail/go-crypto/openpgp/internal/algorithm"
 )
 
 func bigFromBase10(s string) *big.Int {
@@ -222,5 +223,35 @@ func TestSerializingEncryptedKey(t *testing.T) {
 
 	if bufHex := hex.EncodeToString(buf.Bytes()); bufHex != encryptedKeyHex {
 		t.Fatalf("serialization of encrypted key differed from original. Original was %s, but reserialized as %s", encryptedKeyHex, bufHex)
+	}
+}
+
+func TestSymmetricallyEncryptedKey(t *testing.T) {
+	const encryptedKeyHex = "c15003999bd17d726446da64018cb4d628ae753c646b81f87f21269cd70033df9db940896a0b0e48f4d3b26e2dfbcf59ca7d30b65ea95ebb072e643407c732c479093b9d180c2eb51c98814e1bbbc6d0a17f"
+
+	expectedNonce := []byte{0x8c, 0xb4, 0xd6, 0x28, 0xae, 0x75, 0x3c, 0x64, 0x6b, 0x81, 0xf8, 0x7f, 0x21, 0x26, 0x9c, 0xd7}
+
+	expectedCiphertext := []byte {0xdf, 0x9d, 0xb9, 0x40, 0x89, 0x6a, 0x0b, 0x0e, 0x48, 0xf4, 0xd3, 0xb2, 0x6e, 0x2d, 0xfb, 0xcf, 0x59, 0xca, 0x7d, 0x30, 0xb6, 0x5e, 0xa9, 0x5e, 0xbb, 0x07, 0x2e, 0x64, 0x34, 0x07, 0xc7, 0x32, 0xc4, 0x79, 0x09, 0x3b, 0x9d, 0x18, 0x0c, 0x2e, 0xb5, 0x1c, 0x98, 0x81, 0x4e, 0x1b, 0xbb, 0xc6, 0xd0, 0xa1, 0x7f}
+
+	p, err := Read(readerFromHex(encryptedKeyHex))
+	if err != nil {
+		t.Fatal("error reading packet")
+	}
+
+	ek, ok := p.(*EncryptedKey)
+	if !ok {
+		t.Fatalf("didn't parse and EncryptedKey, got %#v", p)
+	}
+
+	if ek.aeadMode != algorithm.AEADModeEAX {
+		t.Errorf("Parsed wrong aead mode, got %d, expected: 1", ek.aeadMode)
+	}
+
+	if !bytes.Equal(expectedNonce, ek.nonce) {
+		t.Errorf("Parsed wrong nonce, got %x, expected %x", ek.nonce, expectedNonce)
+	}
+
+	if !bytes.Equal(expectedCiphertext, ek.encryptedMPI1.Bytes()) {
+		t.Errorf("Parsed wrong ciphertext, got %x, expected %x", ek.encryptedMPI1.Bytes(), expectedCiphertext)
 	}
 }

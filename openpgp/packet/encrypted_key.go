@@ -31,6 +31,8 @@ type EncryptedKey struct {
 	Key        []byte         // only valid after a successful Decrypt
 
 	encryptedMPI1, encryptedMPI2 encoding.Field
+	nonce      []byte
+	aeadMode   algorithm.AEADMode
 }
 
 func (e *EncryptedKey) parse(r io.Reader) (err error) {
@@ -71,6 +73,16 @@ func (e *EncryptedKey) parse(r io.Reader) (err error) {
 			return
 		}
 	case ExperimentalPubKeyAlgoAEAD:
+		var aeadMode [1]byte
+		if _, err = readFull(r, aeadMode[:]); err != nil {
+			return
+		}
+		e.aeadMode = algorithm.AEADMode(aeadMode[0])
+		nonceLength := e.aeadMode.NonceLength()
+		e.nonce = make([]byte, nonceLength)
+		if _, err = readFull(r, e.nonce); err != nil {
+			return
+		}
 		e.encryptedMPI1 = new(encoding.OctetString)
 		if _, err = e.encryptedMPI1.ReadFrom(r); err != nil {
 			return
@@ -122,9 +134,8 @@ func (e *EncryptedKey) Decrypt(priv *PrivateKey, config *Config) error {
 		oid := priv.PublicKey.oid.EncodedBytes()
 		b, err = ecdh.Decrypt(priv.PrivateKey.(*ecdh.PrivateKey), vsG, m, oid, priv.PublicKey.Fingerprint[:])
 	case ExperimentalPubKeyAlgoAEAD:
-		modeAEAD := algorithm.AEADMode(e.encryptedMPI1.Bytes()[0])
 		priv := priv.PrivateKey.(*symmetric.PrivateKeyAEAD)
-		b, err = priv.Decrypt(e.encryptedMPI1.Bytes()[1:], modeAEAD)
+		b, err = priv.Decrypt(e.nonce, e.encryptedMPI1.Bytes(), e.aeadMode)
 	default:
 		err = errors.InvalidArgumentError("cannot decrypt encrypted session key with private key of type " + strconv.Itoa(int(priv.PubKeyAlgo)))
 	}
@@ -296,18 +307,18 @@ func serializeEncryptedKeyECDH(w io.Writer, rand io.Reader, header [10]byte, pub
 
 func serializeEncryptedKeyAEAD(w io.Writer, rand io.Reader, header [10]byte, pub *symmetric.PublicKeyAEAD, keyBlock []byte, config *AEADConfig) error {
 	mode := algorithm.AEADMode(config.Mode())
-	ciphertext, err := pub.Encrypt(rand, keyBlock, mode)
+	iv, ciphertextRaw, err := pub.Encrypt(rand, keyBlock, mode)
 	if err != nil {
 		return errors.InvalidArgumentError("AEAD encryption failed: " + err.Error())
 	}
 
-	buffer := make([]byte, len(ciphertext) + 1)
-	buffer[0] = byte(config.Mode())
-	copy(buffer[1:], ciphertext)
-	stream := encoding.NewOctetString(buffer)
+	ciphertextOctetString := encoding.NewOctetString(ciphertextRaw)
+
+	buffer := append([]byte{byte(config.Mode())}, iv...)
+	buffer = append(buffer, ciphertextOctetString.EncodedBytes()...)
 
 	packetLen := 10 /* header length */
-	packetLen += int(stream.EncodedLength())
+	packetLen += int(len(buffer))
 
 	err = serializeHeader(w, packetTypeEncryptedKey, packetLen)
 	if err != nil {
@@ -319,6 +330,6 @@ func serializeEncryptedKeyAEAD(w io.Writer, rand io.Reader, header [10]byte, pub
 		return err
 	}
 
-	_, err = w.Write(stream.EncodedBytes())
+	_, err = w.Write(buffer)
 	return err
 }

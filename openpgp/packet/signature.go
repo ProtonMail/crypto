@@ -54,7 +54,7 @@ type Signature struct {
 	DSASigR, DSASigS     encoding.Field
 	ECDSASigR, ECDSASigS encoding.Field
 	EdDSASigR, EdDSASigS encoding.Field
-	HMAC                 []byte
+	HMAC                 encoding.Field
 
 	// rawSubpackets contains the unparsed subpackets, in order.
 	rawSubpackets []outputSubpacket
@@ -186,11 +186,8 @@ func (sig *Signature) parse(r io.Reader) (err error) {
 			return
 		}
 	case ExperimentalPubKeyAlgoHMAC:
-		var lengthOctet [1]byte
-		r.Read(lengthOctet[:])
-		length := uint8(lengthOctet[0])
-		sig.HMAC = make([]byte, length)
-		if _, err = r.Read(sig.HMAC); err != nil {
+		sig.HMAC = new(encoding.OctetString)
+		if _, err = sig.HMAC.ReadFrom(r); err != nil {
 			return
 		}
 	default:
@@ -654,9 +651,7 @@ func (sig *Signature) Sign(h hash.Hash, priv *PrivateKey, config *Config) (err e
 	case ExperimentalPubKeyAlgoHMAC:
 		sigdata, err := priv.PrivateKey.(crypto.Signer).Sign(config.Random(), digest, crypto.Hash(0))
 		if err == nil {
-			sigdataLength := len(sigdata)
-			sig.HMAC = make([]byte, sigdataLength)
-			copy(sig.HMAC, sigdata[:])
+			sig.HMAC = encoding.NewOctetString(sigdata)
 		}
 	default:
 		err = errors.UnsupportedError("public key algorithm: " + strconv.Itoa(int(sig.PubKeyAlgo)))
@@ -754,8 +749,7 @@ func (sig *Signature) Serialize(w io.Writer) (err error) {
 		sigLength = int(sig.EdDSASigR.EncodedLength())
 		sigLength += int(sig.EdDSASigS.EncodedLength())
 	case ExperimentalPubKeyAlgoHMAC:
-		sigLength = len(sig.HMAC)
-		sigLength += 1
+		sigLength = int(sig.HMAC.EncodedLength())
 	default:
 		panic("impossible")
 	}
@@ -820,11 +814,7 @@ func (sig *Signature) serializeBody(w io.Writer) (err error) {
 		}
 		_, err = w.Write(sig.EdDSASigS.EncodedBytes())
 	case ExperimentalPubKeyAlgoHMAC:
-		length := uint8(len(sig.HMAC))
-		w.Write([]byte{length})
-		if _, err = w.Write(sig.HMAC); err != nil {
-			return
-		}
+		_, err = w.Write(sig.HMAC.EncodedBytes())
 	default:
 		panic("impossible")
 	}
