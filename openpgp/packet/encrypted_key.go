@@ -83,7 +83,7 @@ func (e *EncryptedKey) parse(r io.Reader) (err error) {
 		if _, err = readFull(r, e.nonce); err != nil {
 			return
 		}
-		e.encryptedMPI1 = new(encoding.OctetString)
+		e.encryptedMPI1 = new(encoding.ShortByteString)
 		if _, err = e.encryptedMPI1.ReadFrom(r); err != nil {
 			return
 		}
@@ -312,10 +312,10 @@ func serializeEncryptedKeyAEAD(w io.Writer, rand io.Reader, header [10]byte, pub
 		return errors.InvalidArgumentError("AEAD encryption failed: " + err.Error())
 	}
 
-	ciphertextOctetString := encoding.NewOctetString(ciphertextRaw)
+	ciphertextShortByteString := encoding.NewShortByteString(ciphertextRaw)
 
 	buffer := append([]byte{byte(config.Mode())}, iv...)
-	buffer = append(buffer, ciphertextOctetString.EncodedBytes()...)
+	buffer = append(buffer, ciphertextShortByteString.EncodedBytes()...)
 
 	packetLen := 10 /* header length */
 	packetLen += int(len(buffer))

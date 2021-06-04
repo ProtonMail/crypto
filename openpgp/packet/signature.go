@@ -186,7 +186,7 @@ func (sig *Signature) parse(r io.Reader) (err error) {
 			return
 		}
 	case ExperimentalPubKeyAlgoHMAC:
-		sig.HMAC = new(encoding.OctetString)
+		sig.HMAC = new(encoding.ShortByteString)
 		if _, err = sig.HMAC.ReadFrom(r); err != nil {
 			return
 		}
@@ -651,7 +651,7 @@ func (sig *Signature) Sign(h hash.Hash, priv *PrivateKey, config *Config) (err e
 	case ExperimentalPubKeyAlgoHMAC:
 		sigdata, err := priv.PrivateKey.(crypto.Signer).Sign(config.Random(), digest, crypto.Hash(0))
 		if err == nil {
-			sig.HMAC = encoding.NewOctetString(sigdata)
+			sig.HMAC = encoding.NewShortByteString(sigdata)
 		}
 	default:
 		err = errors.UnsupportedError("public key algorithm: " + strconv.Itoa(int(sig.PubKeyAlgo)))

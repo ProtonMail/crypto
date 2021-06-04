@@ -19,9 +19,9 @@ var octetStreamTests = []struct {
 	},
 }
 
-func TestOctetString(t *testing.T) {
+func TestShortByteString(t *testing.T) {
 	for i, test := range octetStreamTests {
-		octetStream := NewOctetString(test.data)
+		octetStream := NewShortByteString(test.data)
 
 		if b := octetStream.Bytes(); !bytes.Equal(b, test.data) {
 			t.Errorf("#%d: bad creation got:%x want:%x", i, b, test.data)
@@ -47,7 +47,7 @@ func TestOctetString(t *testing.T) {
 			t.Errorf("#%d: bad encoded length got:%d want%d", i, encodedLength, len(test.data))
 		}
 
-		newStream := new(OctetString)
+		newStream := new(ShortByteString)
 		newStream.ReadFrom(bytes.NewReader(encodedBytes))
 
 		if !checkEquality(newStream, octetStream) {
@@ -56,6 +56,6 @@ func TestOctetString(t *testing.T) {
 	}
 }
 
-func checkEquality (left *OctetString, right *OctetString) bool {
+func checkEquality (left *ShortByteString, right *ShortByteString) bool {
 	return (left.length == right.length) && (bytes.Equal(left.data, right.data))
 }

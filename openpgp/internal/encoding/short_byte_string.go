@@ -4,26 +4,26 @@ import (
 	"io"
 )
 
-type OctetString struct {
+type ShortByteString struct {
 	length	uint16
 	data []byte
 }
 
-func NewOctetString(data []byte) *OctetString {
+func NewShortByteString(data []byte) *ShortByteString {
 	byteLength := uint16(len(data))
 
-	return &OctetString{byteLength, data}
+	return &ShortByteString{byteLength, data}
 }
 
-func (stream *OctetString) Bytes() []byte {
+func (stream *ShortByteString) Bytes() []byte {
 	return stream.data
 }
 
-func (stream *OctetString) BitLength() uint16 {
+func (stream *ShortByteString) BitLength() uint16 {
 	return stream.length * 8
 }
 
-func (stream *OctetString) EncodedBytes() []byte {
+func (stream *ShortByteString) EncodedBytes() []byte {
 	encodedLength := [2]byte{
 		uint8((stream.length >> 8)),
 		uint8(stream.length),
@@ -31,11 +31,11 @@ func (stream *OctetString) EncodedBytes() []byte {
 	return append(encodedLength[:], stream.data...)
 }
 
-func (stream *OctetString) EncodedLength() uint16 {
+func (stream *ShortByteString) EncodedLength() uint16 {
 	return stream.length + 2
 }
 
-func (stream *OctetString) ReadFrom(r io.Reader) (int64, error) {
+func (stream *ShortByteString) ReadFrom(r io.Reader) (int64, error) {
 	var lengthBytes [2]byte
 	if _, err := io.ReadFull(r, lengthBytes[:]); err != nil {
 		return 0, err
