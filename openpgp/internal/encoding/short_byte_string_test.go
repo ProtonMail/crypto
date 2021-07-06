@@ -32,17 +32,17 @@ func TestShortByteString(t *testing.T) {
 			t.Errorf("#%d: bad bit length got:%d want :%d", i, bitLength, expectedBitLength)
 		}
 
-		expectedEncodedLength := uint16(len(test.data)) + 2
+		expectedEncodedLength := uint16(len(test.data)) + 1
 		if encodedLength := octetStream.EncodedLength(); encodedLength != expectedEncodedLength {
 			t.Errorf("#%d: bad encoded length got:%d want:%d", i, encodedLength, expectedEncodedLength)
 		}
 
 		encodedBytes := octetStream.EncodedBytes()
-		if !bytes.Equal(encodedBytes[2:], test.data) {
+		if !bytes.Equal(encodedBytes[1:], test.data) {
 			t.Errorf("#%d: bad encoded bytes got:%x want:%x", i, encodedBytes[2:], test.data)
 		}
 
-		encodedLength := (int(encodedBytes[0]) << 8) + int(encodedBytes[1])
+		encodedLength := int(encodedBytes[0])
 		if encodedLength != len(test.data) {
 			t.Errorf("#%d: bad encoded length got:%d want%d", i, encodedLength, len(test.data))
 		}

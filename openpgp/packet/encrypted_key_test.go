@@ -227,7 +227,7 @@ func TestSerializingEncryptedKey(t *testing.T) {
 }
 
 func TestSymmetricallyEncryptedKey(t *testing.T) {
-	const encryptedKeyHex = "c15003999bd17d726446da64018cb4d628ae753c646b81f87f21269cd70033df9db940896a0b0e48f4d3b26e2dfbcf59ca7d30b65ea95ebb072e643407c732c479093b9d180c2eb51c98814e1bbbc6d0a17f"
+	const encryptedKeyHex = "c14f03999bd17d726446da64018cb4d628ae753c646b81f87f21269cd733df9db940896a0b0e48f4d3b26e2dfbcf59ca7d30b65ea95ebb072e643407c732c479093b9d180c2eb51c98814e1bbbc6d0a17f"
 
 	expectedNonce := []byte{0x8c, 0xb4, 0xd6, 0x28, 0xae, 0x75, 0x3c, 0x64, 0x6b, 0x81, 0xf8, 0x7f, 0x21, 0x26, 0x9c, 0xd7}
 
