@@ -649,7 +649,7 @@ func (sig *Signature) Sign(h hash.Hash, priv *PrivateKey, config *Config) (err e
 			sig.EdDSASigS = encoding.NewMPI(sigdata[32:])
 		}
 	case ExperimentalPubKeyAlgoHMAC:
-		sigdata, err := priv.PrivateKey.(crypto.Signer).Sign(config.Random(), digest, crypto.Hash(0))
+		sigdata, err := priv.PrivateKey.(crypto.Signer).Sign(config.Random(), digest, nil)
 		if err == nil {
 			sig.HMAC = encoding.NewShortByteString(sigdata)
 		}
