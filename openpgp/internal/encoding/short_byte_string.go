@@ -44,6 +44,8 @@ func (stream *ShortByteString) ReadFrom(r io.Reader) (int64, error) {
 	stream.length = (uint16(lengthBytes[0]) << 8) + uint16(lengthBytes[1])
 
 	stream.data = make([]byte, stream.length)
-	io.ReadFull(r, stream.data)
+	if _, err := io.ReadFull(r, stream.data); err != nil {
+		return 0, err
+	}
 	return int64(stream.length + 2), nil
 }
