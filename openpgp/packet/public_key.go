@@ -756,7 +756,7 @@ func (pk *PublicKey) VerifySignature(signed hash.Hash, sig *Signature) (err erro
 		HMACKey := pk.PublicKey.(*symmetric.PublicKeyHMAC)
 
 		if !HMACKey.Verify(hashBytes, sig.HMAC.Bytes()) {
-			return errors.SignatureError("HMAC verification  failure")
+			return errors.SignatureError("HMAC verification failure")
 		}
 		return nil
 	default:
