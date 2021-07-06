@@ -15,37 +15,37 @@ func NewShortByteString(data []byte) *ShortByteString {
 	return &ShortByteString{byteLength, data}
 }
 
-func (stream *ShortByteString) Bytes() []byte {
-	return stream.data
+func (input *ShortByteString) Bytes() []byte {
+	return input.data
 }
 
-func (stream *ShortByteString) BitLength() uint16 {
-	return stream.length * 8
+func (input *ShortByteString) BitLength() uint16 {
+	return input.length * 8
 }
 
-func (stream *ShortByteString) EncodedBytes() []byte {
+func (input *ShortByteString) EncodedBytes() []byte {
 	encodedLength := [2]byte{
-		uint8((stream.length >> 8)),
-		uint8(stream.length),
+		uint8((input.length >> 8)),
+		uint8(input.length),
 	}
-	return append(encodedLength[:], stream.data...)
+	return append(encodedLength[:], input.data...)
 }
 
-func (stream *ShortByteString) EncodedLength() uint16 {
-	return stream.length + 2
+func (input *ShortByteString) EncodedLength() uint16 {
+	return input.length + 2
 }
 
-func (stream *ShortByteString) ReadFrom(r io.Reader) (int64, error) {
+func (input *ShortByteString) ReadFrom(r io.Reader) (int64, error) {
 	var lengthBytes [2]byte
 	if _, err := io.ReadFull(r, lengthBytes[:]); err != nil {
 		return 0, err
 	}
 
-	stream.length = (uint16(lengthBytes[0]) << 8) + uint16(lengthBytes[1])
+	input.length = (uint16(lengthBytes[0]) << 8) + uint16(lengthBytes[1])
 
-	stream.data = make([]byte, stream.length)
-	if _, err := io.ReadFull(r, stream.data); err != nil {
+	input.data = make([]byte, input.length)
+	if _, err := io.ReadFull(r, input.data); err != nil {
 		return 0, err
 	}
-	return int64(stream.length + 2), nil
+	return int64(input.length + 2), nil
 }
