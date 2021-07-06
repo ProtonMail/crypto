@@ -693,48 +693,41 @@ func (pk *PrivateKey) parseEdDSAPrivateKey(data []byte) (err error) {
 
 func (pk *PrivateKey) parseAEADPrivateKey(data []byte) (err error) {
 	pubKey := pk.PublicKey.PublicKey.(*symmetric.AEADPublicKey)
-	key := data[32:len(data)-2]
-	symmetricPriv := &symmetric.AEADPrivateKey{
-		Key: key,
-	}
 
-	copy(symmetricPriv.PublicKey.BindingHash[:], pubKey.BindingHash[:])
-	symmetricPriv.PublicKey.Cipher = pubKey.Cipher
+	aeadPriv := new(symmetric.AEADPrivateKey)
+	aeadPriv.PublicKey = *pubKey
+	aeadPriv.Key = data[32:len(data)-2]
 
-	symmetricPriv.PublicKey.Key = make([]byte, len(key))
-	copy(symmetricPriv.PublicKey.Key, key)
+	aeadPriv.PublicKey.Key = aeadPriv.Key
 
-	copy(symmetricPriv.HashSeed[:], data[:32])
+	copy(aeadPriv.HashSeed[:], data[:32])
 
-	if err = validateAEADParameters(symmetricPriv); err != nil {
+	if err = validateAEADParameters(aeadPriv); err != nil {
 		return
 	}
 
-	pk.PrivateKey = symmetricPriv
-	pk.PublicKey.PublicKey = &symmetricPriv.PublicKey
+	pk.PrivateKey = aeadPriv
+	pk.PublicKey.PublicKey = &aeadPriv.PublicKey
 	return
 }
 
 func (pk *PrivateKey) parseHMACPrivateKey(data []byte) (err error) {
 	pubKey := pk.PublicKey.PublicKey.(*symmetric.HMACPublicKey)
-	key := data[32:len(data)-2]
-	symmetricPriv := &symmetric.HMACPrivateKey{
-		Key: key,
-	}
-	copy(symmetricPriv.PublicKey.BindingHash[:], pubKey.BindingHash[:])
-	symmetricPriv.PublicKey.Hash = pubKey.Hash
 
-	symmetricPriv.PublicKey.Key = make([]byte, len(key))
-	copy(symmetricPriv.PublicKey.Key, key)
+	hmacPriv := new(symmetric.HMACPrivateKey)
+	hmacPriv.PublicKey = *pubKey
+	hmacPriv.Key = data[32:len(data)-2]
 
-	copy(symmetricPriv.HashSeed[:], data[:32])
+	hmacPriv.PublicKey.Key = hmacPriv.Key
 
-	if err = validateHMACParameters(symmetricPriv); err != nil {
+	copy(hmacPriv.HashSeed[:], data[:32])
+
+	if err = validateHMACParameters(hmacPriv); err != nil {
 		return
 	}
 
-	pk.PrivateKey = symmetricPriv
-	pk.PublicKey.PublicKey = &symmetricPriv.PublicKey
+	pk.PrivateKey = hmacPriv
+	pk.PublicKey.PublicKey = &hmacPriv.PublicKey
 	return
 }
 
