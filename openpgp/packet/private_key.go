@@ -129,7 +129,7 @@ func NewSignerPrivateKey(creationTime time.Time, signer crypto.Signer) *PrivateK
 		pk.PublicKey = *NewEdDSAPublicKey(creationTime, pubkey)
 	case ed25519.PublicKey:
 		pk.PublicKey = *NewEdDSAPublicKey(creationTime, &pubkey)
-	case *symmetric.PublicKeyHMAC:
+	case *symmetric.HMACPublicKey:
 		pk.PublicKey = *NewHMACPublicKey(creationTime, pubkey)
 	default:
 		panic("openpgp: unknown crypto.Signer type in NewSignerPrivateKey")
@@ -148,7 +148,7 @@ func NewDecrypterPrivateKey(creationTime time.Time, decrypter interface{}) *Priv
 		pk.PublicKey = *NewElGamalPublicKey(creationTime, &priv.PublicKey)
 	case *ecdh.PrivateKey:
 		pk.PublicKey = *NewECDHPublicKey(creationTime, &priv.PublicKey)
-	case *symmetric.PrivateKeyAEAD:
+	case *symmetric.AEADPrivateKey:
 		pk.PublicKey = *NewAEADPublicKey(creationTime, &priv.PublicKey)
 	default:
 		panic("openpgp: unknown decrypter type in NewDecrypterPrivateKey")
@@ -373,7 +373,7 @@ func serializeECDHPrivateKey(w io.Writer, priv *ecdh.PrivateKey) error {
 	return err
 }
 
-func serializeAEADPrivateKey(w io.Writer, priv *symmetric.PrivateKeyAEAD) (err error) {
+func serializeAEADPrivateKey(w io.Writer, priv *symmetric.AEADPrivateKey) (err error) {
 	_, err = w.Write(priv.HashSeed[:])
 	if err != nil {
 		return
@@ -382,7 +382,7 @@ func serializeAEADPrivateKey(w io.Writer, priv *symmetric.PrivateKeyAEAD) (err e
 	return
 }
 
-func serializeHMACPrivateKey(w io.Writer, priv *symmetric.PrivateKeyHMAC) (err error) {
+func serializeHMACPrivateKey(w io.Writer, priv *symmetric.HMACPrivateKey) (err error) {
 	_, err = w.Write(priv.HashSeed[:])
 	if err != nil {
 		return
@@ -524,9 +524,9 @@ func (pk *PrivateKey) serializePrivateKey(w io.Writer) (err error) {
 		err = serializeEdDSAPrivateKey(w, priv)
 	case *ecdh.PrivateKey:
 		err = serializeECDHPrivateKey(w, priv)
-	case *symmetric.PrivateKeyAEAD:
+	case *symmetric.AEADPrivateKey:
 		err = serializeAEADPrivateKey(w, priv)
-	case *symmetric.PrivateKeyHMAC:
+	case *symmetric.HMACPrivateKey:
 		err = serializeHMACPrivateKey(w, priv)
 	default:
 		err = errors.InvalidArgumentError("unknown private key type")
@@ -692,9 +692,9 @@ func (pk *PrivateKey) parseEdDSAPrivateKey(data []byte) (err error) {
 }
 
 func (pk *PrivateKey) parseAEADPrivateKey(data []byte) (err error) {
-	pubKey := pk.PublicKey.PublicKey.(*symmetric.PublicKeyAEAD)
+	pubKey := pk.PublicKey.PublicKey.(*symmetric.AEADPublicKey)
 	key := data[32:len(data)-2]
-	symmetricPriv := &symmetric.PrivateKeyAEAD{
+	symmetricPriv := &symmetric.AEADPrivateKey{
 		Key: key,
 	}
 
@@ -716,9 +716,9 @@ func (pk *PrivateKey) parseAEADPrivateKey(data []byte) (err error) {
 }
 
 func (pk *PrivateKey) parseHMACPrivateKey(data []byte) (err error) {
-	pubKey := pk.PublicKey.PublicKey.(*symmetric.PublicKeyHMAC)
+	pubKey := pk.PublicKey.PublicKey.(*symmetric.HMACPublicKey)
 	key := data[32:len(data)-2]
-	symmetricPriv := &symmetric.PrivateKeyHMAC{
+	symmetricPriv := &symmetric.HMACPrivateKey{
 		Key: key,
 	}
 	copy(symmetricPriv.PublicKey.BindingHash[:], pubKey.BindingHash[:])
@@ -738,11 +738,11 @@ func (pk *PrivateKey) parseHMACPrivateKey(data []byte) (err error) {
 	return
 }
 
-func validateAEADParameters(priv *symmetric.PrivateKeyAEAD) error {
+func validateAEADParameters(priv *symmetric.AEADPrivateKey) error {
 	return validateCommonSymmetric(priv.HashSeed, priv.PublicKey.BindingHash)
 }
 
-func validateHMACParameters(priv *symmetric.PrivateKeyHMAC) error {
+func validateHMACParameters(priv *symmetric.HMACPrivateKey) error {
 	return validateCommonSymmetric(priv.HashSeed, priv.PublicKey.BindingHash)
 }
 

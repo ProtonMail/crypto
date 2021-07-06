@@ -910,11 +910,11 @@ func TestAddHMACSubkey(t *testing.T) {
 		t.Error("could not read keyring", err)
 	}
 
-	generatedPrivateKey := entity.Subkeys[1].PrivateKey.PrivateKey.(*symmetric.PrivateKeyHMAC)
-	parsedPrivateKey := key[0].Subkeys[1].PrivateKey.PrivateKey.(*symmetric.PrivateKeyHMAC)
+	generatedPrivateKey := entity.Subkeys[1].PrivateKey.PrivateKey.(*symmetric.HMACPrivateKey)
+	parsedPrivateKey := key[0].Subkeys[1].PrivateKey.PrivateKey.(*symmetric.HMACPrivateKey)
 
-	generatedPublicKey := entity.Subkeys[1].PublicKey.PublicKey.(*symmetric.PublicKeyHMAC)
-	parsedPublicKey := key[0].Subkeys[1].PublicKey.PublicKey.(*symmetric.PublicKeyHMAC)
+	generatedPublicKey := entity.Subkeys[1].PublicKey.PublicKey.(*symmetric.HMACPublicKey)
+	parsedPublicKey := key[0].Subkeys[1].PublicKey.PublicKey.(*symmetric.HMACPublicKey)
 
 	if bytes.Compare(parsedPrivateKey.Key, generatedPrivateKey.Key) != 0 {
 		t.Error("parsed wrong key")
@@ -955,7 +955,7 @@ func TestAddAEADSubkey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	generatedPrivateKey := entity.Subkeys[1].PrivateKey.PrivateKey.(*symmetric.PrivateKeyAEAD)
+	generatedPrivateKey := entity.Subkeys[1].PrivateKey.PrivateKey.(*symmetric.AEADPrivateKey)
 
 	buf := bytes.NewBuffer(nil)
 	w, _ := armor.Encode(buf , "PGP PRIVATE KEY BLOCK", nil)
@@ -969,10 +969,10 @@ func TestAddAEADSubkey(t *testing.T) {
 		t.Error("could not read keyring", err)
 	}
 
-	parsedPrivateKey := key[0].Subkeys[1].PrivateKey.PrivateKey.(*symmetric.PrivateKeyAEAD)
+	parsedPrivateKey := key[0].Subkeys[1].PrivateKey.PrivateKey.(*symmetric.AEADPrivateKey)
 
-	generatedPublicKey := entity.Subkeys[1].PublicKey.PublicKey.(*symmetric.PublicKeyAEAD)
-	parsedPublicKey := key[0].Subkeys[1].PublicKey.PublicKey.(*symmetric.PublicKeyAEAD)
+	generatedPublicKey := entity.Subkeys[1].PublicKey.PublicKey.(*symmetric.AEADPublicKey)
+	parsedPublicKey := key[0].Subkeys[1].PublicKey.PublicKey.(*symmetric.AEADPublicKey)
 
 	if bytes.Compare(parsedPrivateKey.Key, generatedPrivateKey.Key) != 0 {
 		t.Error("parsed wrong key")
@@ -1026,20 +1026,20 @@ func TestNoSymmetricKeySerialized(t *testing.T) {
 	w := bytes.NewBuffer(nil)
 	entity.Serialize(w)
 
-	firstSymKey := entity.Subkeys[1].PrivateKey.PrivateKey.(*symmetric.PrivateKeyAEAD).Key
+	firstSymKey := entity.Subkeys[1].PrivateKey.PrivateKey.(*symmetric.AEADPrivateKey).Key
 	i := bytes.Index(w.Bytes(), firstSymKey)
 
-	secondSymKey := entity.Subkeys[2].PrivateKey.PrivateKey.(*symmetric.PrivateKeyHMAC).Key
+	secondSymKey := entity.Subkeys[2].PrivateKey.PrivateKey.(*symmetric.HMACPrivateKey).Key
 	k := bytes.Index(w.Bytes(), secondSymKey)
 
 	if (i > 0) || (k > 0) {
 		t.Error("Private key was serialized with public")
 	}
 
-	firstBindingHash := entity.Subkeys[1].PublicKey.PublicKey.(*symmetric.PublicKeyAEAD).BindingHash
+	firstBindingHash := entity.Subkeys[1].PublicKey.PublicKey.(*symmetric.AEADPublicKey).BindingHash
 	i = bytes.Index(w.Bytes(), firstBindingHash[:])
 
-	secondBindingHash := entity.Subkeys[2].PublicKey.PublicKey.(*symmetric.PublicKeyHMAC).BindingHash
+	secondBindingHash := entity.Subkeys[2].PublicKey.PublicKey.(*symmetric.HMACPublicKey).BindingHash
 	k = bytes.Index(w.Bytes(), secondBindingHash[:])
 	if (i > 0) || (k > 0) {
 		t.Errorf("Symmetric public key metadata exported %d %d", i, k)

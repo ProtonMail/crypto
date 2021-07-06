@@ -170,7 +170,7 @@ func NewECDHPublicKey(creationTime time.Time, pub *ecdh.PublicKey) *PublicKey {
 	return pk
 }
 
-func NewAEADPublicKey(creationTime time.Time, pub *symmetric.PublicKeyAEAD) *PublicKey {
+func NewAEADPublicKey(creationTime time.Time, pub *symmetric.AEADPublicKey) *PublicKey {
 	var pk *PublicKey
 	pk = &PublicKey{
 		Version:        4,
@@ -182,7 +182,7 @@ func NewAEADPublicKey(creationTime time.Time, pub *symmetric.PublicKeyAEAD) *Pub
 	return pk
 }
 
-func NewHMACPublicKey(creationTime time.Time, pub *symmetric.PublicKeyHMAC) *PublicKey {
+func NewHMACPublicKey(creationTime time.Time, pub *symmetric.HMACPublicKey) *PublicKey {
 	var pk *PublicKey
 	pk = &PublicKey{
 		Version:        4,
@@ -488,7 +488,7 @@ func (pk *PublicKey) parseAEAD(r io.Reader) (err error) {
 		return
 	}
 
-	symmetric := &symmetric.PublicKeyAEAD{
+	symmetric := &symmetric.AEADPublicKey{
 		Cipher: algorithm.CipherFunction(cipher[0]),
 		BindingHash: bindingHash,
 	}
@@ -508,7 +508,7 @@ func (pk *PublicKey) parseHMAC(r io.Reader) (err error) {
 		return
 	}
 
-	symmetric := &symmetric.PublicKeyHMAC{
+	symmetric := &symmetric.HMACPublicKey{
 		Hash: crypto.Hash(hash[0]),
 		BindingHash: bindingHash,
 	}
@@ -670,7 +670,7 @@ func (pk *PublicKey) serializeWithoutHeaders(w io.Writer) (err error) {
 		_, err = w.Write(pk.p.EncodedBytes())
 		return
 	case ExperimentalPubKeyAlgoAEAD:
-		symmKey := pk.PublicKey.(*symmetric.PublicKeyAEAD)
+		symmKey := pk.PublicKey.(*symmetric.AEADPublicKey)
 		cipherOctet := [1]byte{symmKey.Cipher.Id()}
 		if _, err = w.Write(cipherOctet[:]); err != nil {
 			return
@@ -678,7 +678,7 @@ func (pk *PublicKey) serializeWithoutHeaders(w io.Writer) (err error) {
 		_, err = w.Write(symmKey.BindingHash[:])
 		return
 	case ExperimentalPubKeyAlgoHMAC:
-		symmKey := pk.PublicKey.(*symmetric.PublicKeyHMAC)
+		symmKey := pk.PublicKey.(*symmetric.HMACPublicKey)
 		hashOctet := [1]byte{uint8(symmKey.Hash)}
 		if _, err = w.Write(hashOctet[:]); err != nil {
 			return
@@ -753,7 +753,7 @@ func (pk *PublicKey) VerifySignature(signed hash.Hash, sig *Signature) (err erro
 		}
 		return nil
 	case ExperimentalPubKeyAlgoHMAC:
-		HMACKey := pk.PublicKey.(*symmetric.PublicKeyHMAC)
+		HMACKey := pk.PublicKey.(*symmetric.HMACPublicKey)
 
 		if !HMACKey.Verify(hashBytes, sig.HMAC.Bytes()) {
 			return errors.SignatureError("HMAC verification failure")

@@ -134,7 +134,7 @@ func (e *EncryptedKey) Decrypt(priv *PrivateKey, config *Config) error {
 		oid := priv.PublicKey.oid.EncodedBytes()
 		b, err = ecdh.Decrypt(priv.PrivateKey.(*ecdh.PrivateKey), vsG, m, oid, priv.PublicKey.Fingerprint[:])
 	case ExperimentalPubKeyAlgoAEAD:
-		priv := priv.PrivateKey.(*symmetric.PrivateKeyAEAD)
+		priv := priv.PrivateKey.(*symmetric.AEADPrivateKey)
 		b, err = priv.Decrypt(e.nonce, e.encryptedMPI1.Bytes(), e.aeadMode)
 	default:
 		err = errors.InvalidArgumentError("cannot decrypt encrypted session key with private key of type " + strconv.Itoa(int(priv.PubKeyAlgo)))
@@ -223,7 +223,7 @@ func SerializeEncryptedKey(w io.Writer, pub *PublicKey, cipherFunc CipherFunctio
 	case PubKeyAlgoECDH:
 		return serializeEncryptedKeyECDH(w, config.Random(), buf, pub.PublicKey.(*ecdh.PublicKey), keyBlock, pub.oid, pub.Fingerprint)
 	case ExperimentalPubKeyAlgoAEAD:
-		return serializeEncryptedKeyAEAD(w, config.Random(), buf, pub.PublicKey.(*symmetric.PublicKeyAEAD), keyBlock, config.AEADConfig)
+		return serializeEncryptedKeyAEAD(w, config.Random(), buf, pub.PublicKey.(*symmetric.AEADPublicKey), keyBlock, config.AEADConfig)
 	case PubKeyAlgoDSA, PubKeyAlgoRSASignOnly, ExperimentalPubKeyAlgoHMAC:
 		return errors.InvalidArgumentError("cannot encrypt to public key of type " + strconv.Itoa(int(pub.PubKeyAlgo)))
 	}
@@ -305,7 +305,7 @@ func serializeEncryptedKeyECDH(w io.Writer, rand io.Reader, header [10]byte, pub
 	return err
 }
 
-func serializeEncryptedKeyAEAD(w io.Writer, rand io.Reader, header [10]byte, pub *symmetric.PublicKeyAEAD, keyBlock []byte, config *AEADConfig) error {
+func serializeEncryptedKeyAEAD(w io.Writer, rand io.Reader, header [10]byte, pub *symmetric.AEADPublicKey, keyBlock []byte, config *AEADConfig) error {
 	mode := algorithm.AEADMode(config.Mode())
 	iv, ciphertextRaw, err := pub.Encrypt(rand, keyBlock, mode)
 	if err != nil {

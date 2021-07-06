@@ -9,19 +9,19 @@ import (
 	"github.com/ProtonMail/go-crypto/openpgp/internal/algorithm"
 )
 
-type PublicKeyAEAD struct {
+type AEADPublicKey struct {
 	Cipher algorithm.CipherFunction
 	BindingHash [32]byte
 	Key []byte
 }
 
-type PrivateKeyAEAD struct {
-	PublicKey PublicKeyAEAD
+type AEADPrivateKey struct {
+	PublicKey AEADPublicKey
 	HashSeed [32]byte
 	Key []byte
 }
 
-type PublicKeyHMAC struct {
+type HMACPublicKey struct {
 	Hash crypto.Hash
 	BindingHash [32]byte
 	// While this is a "public" key, the symmetric key needs to be present here.
@@ -32,13 +32,13 @@ type PublicKeyHMAC struct {
 	Key []byte
 }
 
-type PrivateKeyHMAC struct {
-	PublicKey PublicKeyHMAC
+type HMACPrivateKey struct {
+	PublicKey HMACPublicKey
 	HashSeed [32]byte
 	Key []byte
 }
 
-func AEADGenerateKey(rand io.Reader, cipher algorithm.CipherFunction) (priv *PrivateKeyAEAD, err error) {
+func AEADGenerateKey(rand io.Reader, cipher algorithm.CipherFunction) (priv *AEADPrivateKey, err error) {
 	priv, err = generatePrivatePartAEAD(rand, cipher)
 	if err != nil {
 		return
@@ -48,8 +48,8 @@ func AEADGenerateKey(rand io.Reader, cipher algorithm.CipherFunction) (priv *Pri
 	return
 }
 
-func generatePrivatePartAEAD(rand io.Reader, cipher algorithm.CipherFunction) (priv *PrivateKeyAEAD, err error) {
-	priv = new(PrivateKeyAEAD)
+func generatePrivatePartAEAD(rand io.Reader, cipher algorithm.CipherFunction) (priv *AEADPrivateKey, err error) {
+	priv = new(AEADPrivateKey)
 	var seed [32] byte
 	_, err = rand.Read(seed[:])
 	if err != nil {
@@ -67,7 +67,7 @@ func generatePrivatePartAEAD(rand io.Reader, cipher algorithm.CipherFunction) (p
 	return
 }
 
-func (priv *PrivateKeyAEAD) generatePublicPartAEAD(cipher algorithm.CipherFunction) (err error) {
+func (priv *AEADPrivateKey) generatePublicPartAEAD(cipher algorithm.CipherFunction) (err error) {
 	priv.PublicKey.Cipher = cipher
 
 	bindingHash := ComputeBindingHash(priv.HashSeed)
@@ -78,7 +78,7 @@ func (priv *PrivateKeyAEAD) generatePublicPartAEAD(cipher algorithm.CipherFuncti
 	return
 }
 
-func HMACGenerateKey(rand io.Reader, hash crypto.Hash) (priv *PrivateKeyHMAC, err error) {
+func HMACGenerateKey(rand io.Reader, hash crypto.Hash) (priv *HMACPrivateKey, err error) {
 	priv, err = generatePrivatePartHMAC(rand, hash)
 	if err != nil {
 		return
@@ -88,8 +88,8 @@ func HMACGenerateKey(rand io.Reader, hash crypto.Hash) (priv *PrivateKeyHMAC, er
 	return
 }
 
-func generatePrivatePartHMAC(rand io.Reader, hash crypto.Hash) (priv *PrivateKeyHMAC, err error) {
-	priv = new(PrivateKeyHMAC)
+func generatePrivatePartHMAC(rand io.Reader, hash crypto.Hash) (priv *HMACPrivateKey, err error) {
+	priv = new(HMACPrivateKey)
 	var seed [32] byte
 	_, err = rand.Read(seed[:])
 	if err != nil {
@@ -107,7 +107,7 @@ func generatePrivatePartHMAC(rand io.Reader, hash crypto.Hash) (priv *PrivateKey
 	return
 }
 
-func (priv *PrivateKeyHMAC) generatePublicPartHMAC(hash crypto.Hash) (err error) {
+func (priv *HMACPrivateKey) generatePublicPartHMAC(hash crypto.Hash) (err error) {
 	priv.PublicKey.Hash = hash
 
 	bindingHash := ComputeBindingHash(priv.HashSeed)
@@ -125,7 +125,7 @@ func ComputeBindingHash(seed [32]byte) []byte {
 	return bindingHash.Sum(nil)
 }
 
-func (pub *PublicKeyAEAD) Encrypt(rand io.Reader, data []byte, mode algorithm.AEADMode) (nonce []byte, ciphertext []byte, err error) {
+func (pub *AEADPublicKey) Encrypt(rand io.Reader, data []byte, mode algorithm.AEADMode) (nonce []byte, ciphertext []byte, err error) {
 	block := pub.Cipher.New(pub.Key)
 	aead := mode.New(block)
 	nonce = make([]byte, aead.NonceSize())
@@ -134,7 +134,7 @@ func (pub *PublicKeyAEAD) Encrypt(rand io.Reader, data []byte, mode algorithm.AE
 	return
 }
 
-func (priv *PrivateKeyAEAD) Decrypt(nonce []byte, ciphertext []byte, mode algorithm.AEADMode) (message []byte, err error) {
+func (priv *AEADPrivateKey) Decrypt(nonce []byte, ciphertext []byte, mode algorithm.AEADMode) (message []byte, err error) {
 
 	block := priv.PublicKey.Cipher.New(priv.Key)
 	aead := mode.New(block)
@@ -142,18 +142,18 @@ func (priv *PrivateKeyAEAD) Decrypt(nonce []byte, ciphertext []byte, mode algori
 	return
 }
 
-func (priv *PrivateKeyHMAC) Public() crypto.PublicKey {
+func (priv *HMACPrivateKey) Public() crypto.PublicKey {
 	return &priv.PublicKey
 }
 
-func (priv *PrivateKeyHMAC) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
+func (priv *HMACPrivateKey) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
 	expectedMAC := calculateMAC(priv.PublicKey.Hash, priv.Key, digest)
 	signature = make([]byte, len(expectedMAC))
 	copy(signature, expectedMAC)
 	return
 }
 
-func (pub *PublicKeyHMAC) Verify(digest []byte, signature []byte) bool {
+func (pub *HMACPublicKey) Verify(digest []byte, signature []byte) bool {
 	expectedMAC := calculateMAC(pub.Hash, pub.Key, digest)
 	return hmac.Equal(expectedMAC, signature)
 }
