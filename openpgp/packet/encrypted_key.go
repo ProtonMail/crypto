@@ -314,7 +314,7 @@ func serializeEncryptedKeyAEAD(w io.Writer, rand io.Reader, header [10]byte, pub
 
 	ciphertextShortByteString := encoding.NewShortByteString(ciphertextRaw)
 
-	buffer := append([]byte{byte(config.Mode())}, iv...)
+	buffer := append([]byte{byte(mode)}, iv...)
 	buffer = append(buffer, ciphertextShortByteString.EncodedBytes()...)
 
 	packetLen := 10 /* header length */
