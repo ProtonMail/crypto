@@ -611,7 +611,12 @@ func (e *Entity) Serialize(w io.Writer) error {
 		}
 	}
 	for _, subkey := range e.Subkeys {
-		if subkey.skipSerialize() {
+
+		// The types of keys below are only useful as private keys. Thus, the
+		// public key packets contain no meaningful information and do not need
+		// to be serialized.
+		if subkey.PublicKey.PubKeyAlgo == packet.ExperimentalPubKeyAlgoHMAC ||
+		  subkey.PublicKey.PubKeyAlgo == packet.ExperimentalPubKeyAlgoAEAD {
 			continue
 		}
 		err = subkey.PublicKey.Serialize(w)
@@ -707,13 +712,4 @@ func (e *Entity) RevokeSubkey(sk *Subkey, reason packet.ReasonForRevocation, rea
 
 	sk.Sig = revSig
 	return nil
-}
-
-func (subKey *Subkey) skipSerialize() bool {
-	switch subKey.PublicKey.PubKeyAlgo {
-	case packet.ExperimentalPubKeyAlgoHMAC, packet.ExperimentalPubKeyAlgoAEAD:
-		return true
-	default:
-		return false
-	}
 }
