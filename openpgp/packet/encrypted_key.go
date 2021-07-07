@@ -223,7 +223,7 @@ func SerializeEncryptedKey(w io.Writer, pub *PublicKey, cipherFunc CipherFunctio
 	case PubKeyAlgoECDH:
 		return serializeEncryptedKeyECDH(w, config.Random(), buf, pub.PublicKey.(*ecdh.PublicKey), keyBlock, pub.oid, pub.Fingerprint)
 	case ExperimentalPubKeyAlgoAEAD:
-		return serializeEncryptedKeyAEAD(w, config.Random(), buf, pub.PublicKey.(*symmetric.AEADPublicKey), keyBlock, config.AEADConfig)
+		return serializeEncryptedKeyAEAD(w, config.Random(), buf, pub.PublicKey.(*symmetric.AEADPublicKey), keyBlock, config.AEAD())
 	case PubKeyAlgoDSA, PubKeyAlgoRSASignOnly, ExperimentalPubKeyAlgoHMAC:
 		return errors.InvalidArgumentError("cannot encrypt to public key of type " + strconv.Itoa(int(pub.PubKeyAlgo)))
 	}
