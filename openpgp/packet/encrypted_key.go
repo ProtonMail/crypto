@@ -14,8 +14,10 @@ import (
 
 	"github.com/ProtonMail/go-crypto/openpgp/ecdh"
 	"github.com/ProtonMail/go-crypto/openpgp/elgamal"
+	"github.com/ProtonMail/go-crypto/openpgp/symmetric"
 	"github.com/ProtonMail/go-crypto/openpgp/errors"
 	"github.com/ProtonMail/go-crypto/openpgp/internal/encoding"
+	"github.com/ProtonMail/go-crypto/openpgp/internal/algorithm"
 )
 
 const encryptedKeyVersion = 3
@@ -29,6 +31,8 @@ type EncryptedKey struct {
 	Key        []byte         // only valid after a successful Decrypt
 
 	encryptedMPI1, encryptedMPI2 encoding.Field
+	nonce      []byte
+	aeadMode   algorithm.AEADMode
 }
 
 func (e *EncryptedKey) parse(r io.Reader) (err error) {
@@ -66,6 +70,21 @@ func (e *EncryptedKey) parse(r io.Reader) (err error) {
 
 		e.encryptedMPI2 = new(encoding.OID)
 		if _, err = e.encryptedMPI2.ReadFrom(r); err != nil {
+			return
+		}
+	case ExperimentalPubKeyAlgoAEAD:
+		var aeadMode [1]byte
+		if _, err = readFull(r, aeadMode[:]); err != nil {
+			return
+		}
+		e.aeadMode = algorithm.AEADMode(aeadMode[0])
+		nonceLength := e.aeadMode.NonceLength()
+		e.nonce = make([]byte, nonceLength)
+		if _, err = readFull(r, e.nonce); err != nil {
+			return
+		}
+		e.encryptedMPI1 = new(encoding.ShortByteString)
+		if _, err = e.encryptedMPI1.ReadFrom(r); err != nil {
 			return
 		}
 	}
@@ -114,6 +133,9 @@ func (e *EncryptedKey) Decrypt(priv *PrivateKey, config *Config) error {
 		m := e.encryptedMPI2.Bytes()
 		oid := priv.PublicKey.oid.EncodedBytes()
 		b, err = ecdh.Decrypt(priv.PrivateKey.(*ecdh.PrivateKey), vsG, m, oid, priv.PublicKey.Fingerprint[:])
+	case ExperimentalPubKeyAlgoAEAD:
+		priv := priv.PrivateKey.(*symmetric.AEADPrivateKey)
+		b, err = priv.Decrypt(e.nonce, e.encryptedMPI1.Bytes(), e.aeadMode)
 	default:
 		err = errors.InvalidArgumentError("cannot decrypt encrypted session key with private key of type " + strconv.Itoa(int(priv.PubKeyAlgo)))
 	}
@@ -200,7 +222,9 @@ func SerializeEncryptedKey(w io.Writer, pub *PublicKey, cipherFunc CipherFunctio
 		return serializeEncryptedKeyElGamal(w, config.Random(), buf, pub.PublicKey.(*elgamal.PublicKey), keyBlock)
 	case PubKeyAlgoECDH:
 		return serializeEncryptedKeyECDH(w, config.Random(), buf, pub.PublicKey.(*ecdh.PublicKey), keyBlock, pub.oid, pub.Fingerprint)
-	case PubKeyAlgoDSA, PubKeyAlgoRSASignOnly:
+	case ExperimentalPubKeyAlgoAEAD:
+		return serializeEncryptedKeyAEAD(w, config.Random(), buf, pub.PublicKey.(*symmetric.AEADPublicKey), keyBlock, config.AEAD())
+	case PubKeyAlgoDSA, PubKeyAlgoRSASignOnly, ExperimentalPubKeyAlgoHMAC:
 		return errors.InvalidArgumentError("cannot encrypt to public key of type " + strconv.Itoa(int(pub.PubKeyAlgo)))
 	}
 
@@ -278,5 +302,34 @@ func serializeEncryptedKeyECDH(w io.Writer, rand io.Reader, header [10]byte, pub
 		return err
 	}
 	_, err = w.Write(m.EncodedBytes())
+	return err
+}
+
+func serializeEncryptedKeyAEAD(w io.Writer, rand io.Reader, header [10]byte, pub *symmetric.AEADPublicKey, keyBlock []byte, config *AEADConfig) error {
+	mode := algorithm.AEADMode(config.Mode())
+	iv, ciphertextRaw, err := pub.Encrypt(rand, keyBlock, mode)
+	if err != nil {
+		return errors.InvalidArgumentError("AEAD encryption failed: " + err.Error())
+	}
+
+	ciphertextShortByteString := encoding.NewShortByteString(ciphertextRaw)
+
+	buffer := append([]byte{byte(mode)}, iv...)
+	buffer = append(buffer, ciphertextShortByteString.EncodedBytes()...)
+
+	packetLen := 10 /* header length */
+	packetLen += int(len(buffer))
+
+	err = serializeHeader(w, packetTypeEncryptedKey, packetLen)
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write(header[:])
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write(buffer)
 	return err
 }

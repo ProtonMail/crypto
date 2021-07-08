@@ -15,6 +15,7 @@ import (
 	"github.com/ProtonMail/go-crypto/openpgp/ecdh"
 	"github.com/ProtonMail/go-crypto/openpgp/elgamal"
 	"github.com/ProtonMail/go-crypto/openpgp/errors"
+	"github.com/ProtonMail/go-crypto/openpgp/symmetric"
 	"github.com/ProtonMail/go-crypto/openpgp/internal/algorithm"
 	"github.com/ProtonMail/go-crypto/openpgp/packet"
 	"golang.org/x/crypto/ed25519"
@@ -877,6 +878,173 @@ func TestAddSubkeySerialized(t *testing.T) {
 			t.Errorf("Invalid subkey signature: %v", err)
 		}
 	}
+}
+
+func TestAddHMACSubkey(t *testing.T) {
+	c := &packet.Config{
+		RSABits: 512,
+		DefaultHash: crypto.SHA512,
+		Algorithm:   packet.ExperimentalPubKeyAlgoHMAC,
+		DefaultCipher: ciphers[4],
+	}
+
+	entity, err := NewEntity("Golang Gopher", "Test Key", "no-reply@golang.com", &packet.Config{ RSABits: 1024})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = entity.AddSigningSubkey(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	buf := bytes.NewBuffer(nil)
+	w, _ := armor.Encode(buf , "PGP PRIVATE KEY BLOCK", nil)
+	if err := entity.SerializePrivate(w, nil); err != nil {
+		t.Errorf("failed to serialize entity: %s", err)
+	}
+	w.Close()
+
+	key, err := ReadArmoredKeyRing(buf)
+	if err != nil {
+		t.Error("could not read keyring", err)
+	}
+
+	generatedPrivateKey := entity.Subkeys[1].PrivateKey.PrivateKey.(*symmetric.HMACPrivateKey)
+	parsedPrivateKey := key[0].Subkeys[1].PrivateKey.PrivateKey.(*symmetric.HMACPrivateKey)
+
+	generatedPublicKey := entity.Subkeys[1].PublicKey.PublicKey.(*symmetric.HMACPublicKey)
+	parsedPublicKey := key[0].Subkeys[1].PublicKey.PublicKey.(*symmetric.HMACPublicKey)
+
+	if bytes.Compare(parsedPrivateKey.Key, generatedPrivateKey.Key) != 0 {
+		t.Error("parsed wrong key")
+	}
+	if bytes.Compare(parsedPublicKey.Key, generatedPrivateKey.Key) != 0 {
+		t.Error("parsed wrong key in public part")
+	}
+	if bytes.Compare(generatedPublicKey.Key, generatedPrivateKey.Key) != 0 {
+		t.Error("generated Public and Private Key differ")
+	}
+
+	if bytes.Compare(parsedPrivateKey.HashSeed[:], generatedPrivateKey.HashSeed[:]) != 0 {
+		t.Error("parsed wrong hash seed")
+	}
+
+	if parsedPrivateKey.PublicKey.Hash != generatedPrivateKey.PublicKey.Hash {
+		t.Error("parsed wrong cipher id")
+	}
+	if bytes.Compare(parsedPrivateKey.PublicKey.BindingHash[:], generatedPrivateKey.PublicKey.BindingHash[:]) != 0 {
+		t.Error("parsed wrong binding hash")
+	}
+}
+
+func TestAddAEADSubkey(t *testing.T) {
+	c := &packet.Config{
+		RSABits: 512,
+		DefaultHash: crypto.SHA512,
+		Algorithm:   packet.ExperimentalPubKeyAlgoAEAD,
+		DefaultCipher: ciphers[4],
+	}
+	entity, err := NewEntity("Golang Gopher", "Test Key", "no-reply@golang.com", &packet.Config{ RSABits: 1024})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = entity.AddEncryptionSubkey(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	generatedPrivateKey := entity.Subkeys[1].PrivateKey.PrivateKey.(*symmetric.AEADPrivateKey)
+
+	buf := bytes.NewBuffer(nil)
+	w, _ := armor.Encode(buf , "PGP PRIVATE KEY BLOCK", nil)
+	if err := entity.SerializePrivate(w, nil); err != nil {
+		t.Errorf("failed to serialize entity: %s", err)
+	}
+	w.Close()
+
+	key, err := ReadArmoredKeyRing(buf)
+	if err != nil {
+		t.Error("could not read keyring", err)
+	}
+
+	parsedPrivateKey := key[0].Subkeys[1].PrivateKey.PrivateKey.(*symmetric.AEADPrivateKey)
+
+	generatedPublicKey := entity.Subkeys[1].PublicKey.PublicKey.(*symmetric.AEADPublicKey)
+	parsedPublicKey := key[0].Subkeys[1].PublicKey.PublicKey.(*symmetric.AEADPublicKey)
+
+	if bytes.Compare(parsedPrivateKey.Key, generatedPrivateKey.Key) != 0 {
+		t.Error("parsed wrong key")
+	}
+	if bytes.Compare(parsedPublicKey.Key, generatedPrivateKey.Key) != 0 {
+		t.Error("parsed wrong key in public part")
+	}
+	if bytes.Compare(generatedPublicKey.Key, generatedPrivateKey.Key) != 0 {
+		t.Error("generated Public and Private Key differ")
+	}
+
+	if bytes.Compare(parsedPrivateKey.HashSeed[:], generatedPrivateKey.HashSeed[:]) != 0 {
+		t.Error("parsed wrong hash seed")
+	}
+
+	if parsedPrivateKey.PublicKey.Cipher.Id() != generatedPrivateKey.PublicKey.Cipher.Id() {
+		t.Error("parsed wrong cipher id")
+	}
+	if bytes.Compare(parsedPrivateKey.PublicKey.BindingHash[:], generatedPrivateKey.PublicKey.BindingHash[:]) != 0 {
+		t.Error("parsed wrong binding hash")
+	}
+}
+
+func TestNoSymmetricKeySerialized(t *testing.T) {
+	aeadConfig := &packet.Config{
+		RSABits: 512,
+		DefaultHash: crypto.SHA512,
+		Algorithm:   packet.ExperimentalPubKeyAlgoAEAD,
+		DefaultCipher: ciphers[4],
+	}
+	hmacConfig := &packet.Config{
+		RSABits: 512,
+		DefaultHash: crypto.SHA512,
+		Algorithm:   packet.ExperimentalPubKeyAlgoHMAC,
+		DefaultCipher: ciphers[4],
+	}
+	entity, err := NewEntity("Golang Gopher", "Test Key", "no-reply@golang.com", &packet.Config{ RSABits: 1024})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = entity.AddEncryptionSubkey(aeadConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = entity.AddSigningSubkey(hmacConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	w := bytes.NewBuffer(nil)
+	entity.Serialize(w)
+
+	firstSymKey := entity.Subkeys[1].PrivateKey.PrivateKey.(*symmetric.AEADPrivateKey).Key
+	i := bytes.Index(w.Bytes(), firstSymKey)
+
+	secondSymKey := entity.Subkeys[2].PrivateKey.PrivateKey.(*symmetric.HMACPrivateKey).Key
+	k := bytes.Index(w.Bytes(), secondSymKey)
+
+	if (i > 0) || (k > 0) {
+		t.Error("Private key was serialized with public")
+	}
+
+	firstBindingHash := entity.Subkeys[1].PublicKey.PublicKey.(*symmetric.AEADPublicKey).BindingHash
+	i = bytes.Index(w.Bytes(), firstBindingHash[:])
+
+	secondBindingHash := entity.Subkeys[2].PublicKey.PublicKey.(*symmetric.HMACPublicKey).BindingHash
+	k = bytes.Index(w.Bytes(), secondBindingHash[:])
+	if (i > 0) || (k > 0) {
+		t.Errorf("Symmetric public key metadata exported %d %d", i, k)
+	}
+
 }
 
 func TestAddSubkeyWithConfig(t *testing.T) {

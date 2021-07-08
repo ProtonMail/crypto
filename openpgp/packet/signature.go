@@ -54,6 +54,7 @@ type Signature struct {
 	DSASigR, DSASigS     encoding.Field
 	ECDSASigR, ECDSASigS encoding.Field
 	EdDSASigR, EdDSASigS encoding.Field
+	HMAC                 encoding.Field
 
 	// rawSubpackets contains the unparsed subpackets, in order.
 	rawSubpackets []outputSubpacket
@@ -115,7 +116,7 @@ func (sig *Signature) parse(r io.Reader) (err error) {
 	sig.SigType = SignatureType(buf[0])
 	sig.PubKeyAlgo = PublicKeyAlgorithm(buf[1])
 	switch sig.PubKeyAlgo {
-	case PubKeyAlgoRSA, PubKeyAlgoRSASignOnly, PubKeyAlgoDSA, PubKeyAlgoECDSA, PubKeyAlgoEdDSA:
+	case PubKeyAlgoRSA, PubKeyAlgoRSASignOnly, PubKeyAlgoDSA, PubKeyAlgoECDSA, PubKeyAlgoEdDSA, ExperimentalPubKeyAlgoHMAC:
 	default:
 		err = errors.UnsupportedError("public key algorithm " + strconv.Itoa(int(sig.PubKeyAlgo)))
 		return
@@ -187,6 +188,11 @@ func (sig *Signature) parse(r io.Reader) (err error) {
 
 		sig.EdDSASigS = new(encoding.MPI)
 		if _, err = sig.EdDSASigS.ReadFrom(r); err != nil {
+			return
+		}
+	case ExperimentalPubKeyAlgoHMAC:
+		sig.HMAC = new(encoding.ShortByteString)
+		if _, err = sig.HMAC.ReadFrom(r); err != nil {
 			return
 		}
 	default:
@@ -657,6 +663,11 @@ func (sig *Signature) Sign(h hash.Hash, priv *PrivateKey, config *Config) (err e
 			sig.EdDSASigR = encoding.NewMPI(sigdata[:32])
 			sig.EdDSASigS = encoding.NewMPI(sigdata[32:])
 		}
+	case ExperimentalPubKeyAlgoHMAC:
+		sigdata, err := priv.PrivateKey.(crypto.Signer).Sign(config.Random(), digest, nil)
+		if err == nil {
+			sig.HMAC = encoding.NewShortByteString(sigdata)
+		}
 	default:
 		err = errors.UnsupportedError("public key algorithm: " + strconv.Itoa(int(sig.PubKeyAlgo)))
 	}
@@ -735,7 +746,7 @@ func (sig *Signature) Serialize(w io.Writer) (err error) {
 	if len(sig.outSubpackets) == 0 {
 		sig.outSubpackets = sig.rawSubpackets
 	}
-	if sig.RSASignature == nil && sig.DSASigR == nil && sig.ECDSASigR == nil && sig.EdDSASigR == nil {
+	if sig.RSASignature == nil && sig.DSASigR == nil && sig.ECDSASigR == nil && sig.EdDSASigR == nil && sig.HMAC == nil {
 		return errors.InvalidArgumentError("Signature: need to call Sign, SignUserId or SignKey before Serialize")
 	}
 
@@ -752,6 +763,8 @@ func (sig *Signature) Serialize(w io.Writer) (err error) {
 	case PubKeyAlgoEdDSA:
 		sigLength = int(sig.EdDSASigR.EncodedLength())
 		sigLength += int(sig.EdDSASigS.EncodedLength())
+	case ExperimentalPubKeyAlgoHMAC:
+		sigLength = int(sig.HMAC.EncodedLength())
 	default:
 		panic("impossible")
 	}
@@ -815,6 +828,8 @@ func (sig *Signature) serializeBody(w io.Writer) (err error) {
 			return
 		}
 		_, err = w.Write(sig.EdDSASigS.EncodedBytes())
+	case ExperimentalPubKeyAlgoHMAC:
+		_, err = w.Write(sig.HMAC.EncodedBytes())
 	default:
 		panic("impossible")
 	}
